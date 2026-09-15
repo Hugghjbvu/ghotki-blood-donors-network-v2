@@ -568,7 +568,11 @@ export interface VerifySessionResult {
 }
 
 /**
- * Lightweight authenticated check verifying if a donor's session & password are still valid
+ * Lightweight authenticated check verifying if a donor's session & password are still valid:
+ * 1. Calls fetchDonorRecord: if notFound, returns notFound: true immediately (no fallback).
+ * 2. If donor record exists, calls authenticateDonor with saved phone & password.
+ *    - If invalid_credentials, returns authFailed: true (password was changed).
+ *    - If network/offline/server_error, keeps session intact.
  */
 export async function verifyDonorSession(
   donorId: string,
@@ -585,15 +589,35 @@ export async function verifyDonorSession(
   }
 
   try {
+    // 1. Fetch donor record first
+    const recordRes = await fetchDonorRecord(donorId);
+
+    // If donor is not found, honour it directly (account was deleted by admin)
+    if (recordRes.notFound) {
+      return { valid: false, notFound: true };
+    }
+
+    // If there was a network/server issue fetching the record, do nothing and keep the session
+    if (!recordRes.success || !recordRes.donor) {
+      return { valid: false, networkError: true };
+    }
+
+    const liveDonor = recordRes.donor;
+
+    // 2. Since record exists, verify the session credentials with authenticateDonor (login action)
     const authRes = await authenticateDonor(cleanPhone, password);
 
     if (authRes.success && authRes.donor) {
       return {
         valid: true,
-        donor: authRes.donor
+        donor: {
+          ...liveDonor,
+          ...authRes.donor
+        }
       };
     }
 
+    // If login fails specifically due to invalid credentials while record exists, password was changed
     if (authRes.reason === "invalid_credentials") {
       return {
         valid: false,
@@ -602,20 +626,11 @@ export async function verifyDonorSession(
       };
     }
 
-    if (authRes.reason === "offline" || authRes.reason === "network") {
-      return {
-        valid: false,
-        networkError: true
-      };
-    }
-
-    // Fallback: Check if record was deleted
-    const recordRes = await fetchDonorRecord(donorId);
-    if (recordRes.notFound) {
-      return { valid: false, notFound: true };
-    }
-
-    return { valid: false, networkError: true };
+    // If it fails for a network or server reason, do nothing and keep the session
+    return {
+      valid: true,
+      donor: liveDonor
+    };
   } catch {
     return { valid: false, networkError: true };
   }
@@ -756,7 +771,7 @@ export async function adminGetStats(
 export async function adminGetAllDonors(
   adminPhone: string,
   adminPassword: string
-): Promise<Donor[]> {
+): Promise<Donor[] | null> {
   try {
     const res = await fetchFromAppsScript({
       action: "adminGetAll",
@@ -769,6 +784,17 @@ export async function adminGetAllDonors(
     } else if (Array.isArray(res)) {
       return res;
     }
+
+    const msg = String(res?.message || res?.error || "").toLowerCase();
+    const isUnauth =
+      res?.status === "unauthorized" ||
+      msg.includes("unauthorized") ||
+      (res?.status === "fail" && (msg.includes("admin") || msg.includes("credential") || msg.includes("auth") || msg.includes("password")));
+
+    if (isUnauth) {
+      return null;
+    }
+
     return [];
   } catch {
     return [];

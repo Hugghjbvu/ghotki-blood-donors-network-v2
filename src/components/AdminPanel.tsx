@@ -61,6 +61,33 @@ function formatDate(timestamp?: number | string): string {
   }
 }
 
+function areDonorListsEqual(a: Donor[], b: Donor[]): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const da = a[i];
+    const db = b[i];
+    if (
+      da.id !== db.id ||
+      da.name !== db.name ||
+      da.fatherName !== db.fatherName ||
+      da.bloodGroup !== db.bloodGroup ||
+      da.city !== db.city ||
+      da.address !== db.address ||
+      da.primaryPhone !== db.primaryPhone ||
+      da.secondaryPhone !== db.secondaryPhone ||
+      da.willingToDonate !== db.willingToDonate ||
+      da.status !== db.status ||
+      da.lastDonationDate !== db.lastDonationDate ||
+      da.isAdmin !== db.isAdmin
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function sanitizeWhatsAppPhone(phone: any): string {
   if (phone === null || phone === undefined) return "";
   let cleaned = String(phone).replace(/[^0-9]/g, "");
@@ -472,9 +499,35 @@ export default function AdminPanel({
     adminToRemove
   );
 
+  // Derive if any administrative action or mutation is currently in progress
+  const isActionInProgress = Boolean(
+    actionLoadingId !== null ||
+    isDeleting ||
+    isResettingPass ||
+    isAddingAdmin ||
+    isRemovingAdmin
+  );
+
   // Synchronize modal open state with parent App (to hide floating action button)
   const onModalStateChangeRef = useRef(onModalStateChange);
   onModalStateChangeRef.current = onModalStateChange;
+
+  const isAnyModalOpenRef = useRef(isAnyModalOpen);
+  isAnyModalOpenRef.current = isAnyModalOpen;
+
+  const isActionInProgressRef = useRef(isActionInProgress);
+  isActionInProgressRef.current = isActionInProgress;
+
+  const isRefreshingRef = useRef(isRefreshing);
+  isRefreshingRef.current = isRefreshing;
+
+  const onUnauthorizedRef = useRef(onUnauthorized);
+  onUnauthorizedRef.current = onUnauthorized;
+
+  const onDonorsUpdatedRef = useRef(onDonorsUpdated);
+  onDonorsUpdatedRef.current = onDonorsUpdated;
+
+  const isSilentRefreshingRef = useRef(false);
 
   useEffect(() => {
     onModalStateChangeRef.current?.(isAnyModalOpen);
@@ -487,6 +540,107 @@ export default function AdminPanel({
   const cleanAdminPhone = String(adminPhone || "").replace(/[^0-9]/g, "");
   const cleanSuperPhone = String(SUPER_ADMIN_PHONE || "").replace(/[^0-9]/g, "");
   const isSuperAdmin = cleanAdminPhone === cleanSuperPhone;
+
+  // Completely silent background refresh:
+  // Re-fetches donor list with adminGetAll, updates donors and derived stats without touching UI loading states or toasts.
+  const performSilentRefresh = useCallback(async () => {
+    if (typeof document !== "undefined" && document.hidden) {
+      return;
+    }
+
+    // Must never interrupt an open modal, an action in progress, or collision with manual refresh
+    if (
+      isAnyModalOpenRef.current ||
+      isActionInProgressRef.current ||
+      isRefreshingRef.current ||
+      isSilentRefreshingRef.current
+    ) {
+      return;
+    }
+
+    isSilentRefreshingRef.current = true;
+    try {
+      const donorsRes = await adminGetAllDonors(adminPhone, adminPassword);
+
+      // Handle unauthorized: clear session and return to login screen
+      if (!donorsRes) {
+        if (typeof navigator !== "undefined" && navigator.onLine) {
+          onUnauthorizedRef.current?.();
+        }
+        return;
+      }
+
+      // Check again if modal was opened or an action was started during the async fetch
+      if (
+        isAnyModalOpenRef.current ||
+        isActionInProgressRef.current
+      ) {
+        return;
+      }
+
+      if (Array.isArray(donorsRes)) {
+        // Only update state if returned data actually differs from what is already shown
+        if (!areDonorListsEqual(allDonorsRef.current, donorsRes)) {
+          setAllDonors(donorsRes);
+          onDonorsUpdatedRef.current?.(donorsRes);
+        }
+      }
+    } catch {
+      // Completely silent — no toasts, no state disruption
+    } finally {
+      isSilentRefreshingRef.current = false;
+    }
+  }, [adminPhone, adminPassword]);
+
+  // Silent background refresh:
+  // 1. While admin panel is open and browser tab is visible, re-fetch donor list with adminGetAll every 60 seconds.
+  // 2. Re-fetch immediately whenever the tab becomes visible again after being hidden.
+  // 3. Stop interval when admin leaves panel or tab is hidden.
+  useEffect(() => {
+    let intervalId: any = null;
+
+    const startPolling = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(() => {
+        if (typeof document !== "undefined" && !document.hidden) {
+          performSilentRefresh();
+        }
+      }, 60000);
+    };
+
+    const stopPolling = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (typeof document === "undefined") return;
+      if (document.hidden) {
+        stopPolling();
+      } else {
+        // Re-fetch immediately whenever the tab becomes visible again after being hidden
+        performSilentRefresh();
+        startPolling();
+      }
+    };
+
+    if (typeof document !== "undefined" && !document.hidden) {
+      startPolling();
+    }
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", handleVisibilityChange);
+    }
+
+    return () => {
+      stopPolling();
+      if (typeof document !== "undefined") {
+        document.removeEventListener("visibilitychange", handleVisibilityChange);
+      }
+    };
+  }, [performSilentRefresh]);
 
   // Load all admin data (only calls adminGetAllDonors and adminListAdmins)
   const loadAdminData = async (showToast = false) => {
