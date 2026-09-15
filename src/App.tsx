@@ -62,7 +62,8 @@ import {
   getCachedLiveDonors,
   cacheLiveDonors,
   filterDonorsList,
-  fetchPublicDonorsFromFirebase
+  fetchPublicDonorsFromFirebase,
+  cleanErrorMessage
 } from "./firebase";
 
 import FloatingParticles from "./components/FloatingParticles";
@@ -357,8 +358,9 @@ export default function App() {
   }, []);
 
   const addToast = useCallback((type: "success" | "error" | "info", message: string) => {
+    const displayMessage = type === "error" ? cleanErrorMessage(message) : message;
     const id = Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
-    setToasts((prev) => [...prev, { id, type, message }]);
+    setToasts((prev) => [...prev, { id, type, message: displayMessage }]);
 
     // Robust timer attached at creation to guarantee dismissal
     setTimeout(() => {
@@ -974,80 +976,142 @@ export default function App() {
         password: userEnteredPass
       };
 
-      // Register the donor via secure Apps Script API
-      const savedDonor = await registerDonor(submittedData);
-      
+      // Helper to establish session and navigate to dashboard
+      const establishSessionAndProceed = (donorObj: Donor) => {
+        const sessionUser: any = { 
+          ...donorObj,
+          password: userEnteredPass,
+          adminPass: userEnteredPass
+        };
+
+        localStorage.setItem("ghotki_donor_session", JSON.stringify(sessionUser));
+        setCurrentUser(sessionUser);
+        setSavedAdminPassword(userEnteredPass);
+
+        // Pre-populate profile editor fields
+        setEditName(sessionUser.name);
+        setEditFatherName(sessionUser.fatherName || "");
+        setEditAddress(sessionUser.address || "");
+        setEditCity(sessionUser.city);
+        setEditBloodGroup(sessionUser.bloodGroup);
+        setEditSecondaryPhone(sessionUser.secondaryPhone || "");
+        setEditLastDonation(sessionUser.lastDonationDate || "");
+        setEditStatus(sessionUser.status || UserStatus.PENDING);
+        setEditWillingToDonate(sessionUser.willingToDonate ?? true);
+        setEditPassword("");
+        setCurrentPassword("");
+
+        // Clear login inputs
+        setLoginPhone("");
+        setLoginPassword("");
+        setLoginError("");
+
+        // Clear registration inputs
+        setRegName("");
+        setRegFatherName("");
+        setRegAddress("");
+        setRegPrimaryPhone("");
+        setRegSecondaryPhone("");
+        setRegLastDonation("");
+        setRegPassword("");
+        setRegConfirmPassword("");
+        setRegStep(1);
+        setIsOptionalExpanded(false);
+
+        // Refresh counters and landing donors
+        loadLandingData();
+
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+        }
+
+        // Take user straight to donor dashboard
+        setView("DASHBOARD");
+        addToast("success", "Registration mukammal — admin approval ka intezar karein");
+      };
+
+      let savedDonor: Donor | null = null;
+      let registrationAbortedOrTimedOut = false;
+
+      try {
+        // Register the donor via secure Apps Script API (30-second timeout specifically for register)
+        savedDonor = await registerDonor(submittedData);
+      } catch (regErr: any) {
+        const errName = String(regErr?.name || "");
+        const rawMsg = String(regErr?.message || "");
+        const isAbortOrTimeout = 
+          Boolean(regErr?.isTimeout) ||
+          errName === "AbortError" ||
+          /abort|timeout|signal/i.test(rawMsg) ||
+          /abort|timeout|signal/i.test(errName);
+
+        if (isAbortOrTimeout) {
+          registrationAbortedOrTimedOut = true;
+        } else {
+          // Re-throw non-timeout errors (e.g. "Phone number already registered") to outer catch
+          throw regErr;
+        }
+      }
+
+      // If registration request timed out or aborted:
+      // Do NOT show a raw error. Instead attempt to log the user in with the phone number and password just entered.
+      if (registrationAbortedOrTimedOut) {
+        try {
+          const authResult = await authenticateDonor(cleanPhone, userEnteredPass);
+          if (authResult.success && authResult.donor) {
+            // Account was created on server! Continue to dashboard as normal.
+            establishSessionAndProceed(authResult.donor);
+            return;
+          }
+        } catch (loginErr) {
+          console.error("Login attempt after registration timeout failed:", loginErr);
+        }
+
+        // Only if that login also fails, show friendly message
+        addToast("error", "Server der laga raha hai. Thori der baad login karke dekhein.");
+        setLoginPhone(cleanPhone);
+        setLoginPassword("");
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+        }
+        setView("LOGIN");
+        return;
+      }
+
       if (!savedDonor || !savedDonor.id) {
         throw new Error("Registration could not be completed.");
       }
 
-      // Clear registration inputs
-      setRegName("");
-      setRegFatherName("");
-      setRegAddress("");
-      setRegPrimaryPhone("");
-      setRegSecondaryPhone("");
-      setRegLastDonation("");
-      setRegPassword("");
-      setRegConfirmPassword("");
-      setRegStep(1);
-      setIsOptionalExpanded(false);
-
-      // Refresh counters and landing donors
-      loadLandingData();
-
-      // Immediately call login action with the phone number and password just entered
+      // If registration completed normally, attempt automatic login
       let autoLoginSuccess = false;
       try {
         const authResult = await authenticateDonor(cleanPhone, userEnteredPass);
-
         if (authResult.success && authResult.donor) {
-          const donorObj = authResult.donor;
-          // Create session object exactly as a normal login does
-          const sessionUser: any = { 
-            ...donorObj,
-            password: userEnteredPass,
-            adminPass: userEnteredPass
-          };
-
-          localStorage.setItem("ghotki_donor_session", JSON.stringify(sessionUser));
-          setCurrentUser(sessionUser);
-          setSavedAdminPassword(userEnteredPass);
-
-          // Pre-populate profile editor fields
-          setEditName(sessionUser.name);
-          setEditFatherName(sessionUser.fatherName || "");
-          setEditAddress(sessionUser.address || "");
-          setEditCity(sessionUser.city);
-          setEditBloodGroup(sessionUser.bloodGroup);
-          setEditSecondaryPhone(sessionUser.secondaryPhone || "");
-          setEditLastDonation(sessionUser.lastDonationDate || "");
-          setEditStatus(sessionUser.status || UserStatus.PENDING);
-          setEditWillingToDonate(sessionUser.willingToDonate ?? true);
-          setEditPassword("");
-          setCurrentPassword("");
-
-          // Clear login inputs
-          setLoginPhone("");
-          setLoginPassword("");
-          setLoginError("");
-
-          if (typeof window !== "undefined") {
-            window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
-          }
-
-          // Take user straight to donor dashboard
-          setView("DASHBOARD");
-          addToast("success", "Registration mukammal — admin approval ka intezar karein");
+          establishSessionAndProceed(authResult.donor);
           autoLoginSuccess = true;
+          return;
         }
       } catch (loginErr) {
         console.error("Auto-login error following registration:", loginErr);
         autoLoginSuccess = false;
       }
 
-      // If automatic login fails for any reason, fall back to current behaviour
+      // If automatic login fails for any reason, fall back to login screen
       if (!autoLoginSuccess) {
+        // Clear registration inputs
+        setRegName("");
+        setRegFatherName("");
+        setRegAddress("");
+        setRegPrimaryPhone("");
+        setRegSecondaryPhone("");
+        setRegLastDonation("");
+        setRegPassword("");
+        setRegConfirmPassword("");
+        setRegStep(1);
+        setIsOptionalExpanded(false);
+
+        loadLandingData();
+
         setLoginPhone(cleanPhone);
         setLoginPassword("");
         addToast("success", "Admin approval ka intezar karein");
@@ -1063,7 +1127,8 @@ export default function App() {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         addToast("error", "Internet connection nahi hai");
       } else {
-        const errorMsg = err?.message || "Server se rabta nahi ho saka";
+        const rawMsg = err?.message || "Server se rabta nahi ho saka";
+        const errorMsg = cleanErrorMessage(rawMsg);
         addToast("error", errorMsg);
         if (errorMsg.toLowerCase().includes("phone") || errorMsg.toLowerCase().includes("registered")) {
           setRegStep(1);

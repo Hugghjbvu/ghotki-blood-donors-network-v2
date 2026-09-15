@@ -181,6 +181,32 @@ export function updateDonorStatusInCache(donorId: string, newStatus: string): vo
 }
 
 /**
+ * Safely format or sanitize error messages to avoid leaking technical/internal errors
+ * like "signal is aborted without reason" to the end user.
+ */
+export function cleanErrorMessage(msg: any): string {
+  if (!msg) return "Server se rabta nahi ho saka";
+  const str = typeof msg === "string" ? msg : String(msg?.message || "");
+  const lower = str.toLowerCase();
+
+  if (
+    lower.includes("signal is aborted") ||
+    lower.includes("aborted without reason") ||
+    lower.includes("aborterror") ||
+    lower.includes("the user aborted a request") ||
+    lower.includes("timeout") ||
+    lower.includes("failed to fetch") ||
+    lower.includes("network request failed") ||
+    lower.includes("load failed") ||
+    lower.includes("networkerror")
+  ) {
+    return "Server der laga raha hai. Thori der baad koshish karein.";
+  }
+
+  return str;
+}
+
+/**
  * Send request to Google Apps Script Web App.
  * Uses text/plain to avoid CORS preflight (OPTIONS) issues with Google Apps Script.
  */
@@ -220,6 +246,17 @@ export async function fetchFromAppsScript(payload: any, timeoutMs: number = 1200
     }
   } catch (err: any) {
     clearTimeout(timer);
+    if (
+      controller.signal.aborted ||
+      err?.name === "AbortError" ||
+      String(err?.message || "").toLowerCase().includes("abort") ||
+      String(err?.message || "").toLowerCase().includes("signal")
+    ) {
+      const abortErr: any = new Error("Server der laga raha hai. Thori der baad koshish karein.");
+      abortErr.name = "AbortError";
+      abortErr.isTimeout = true;
+      throw abortErr;
+    }
     throw err;
   }
 }
@@ -333,7 +370,7 @@ export async function registerDonor(donorData: Omit<Donor, "id"> & { password?: 
     deviceId: deviceId
   };
 
-  const res = await fetchFromAppsScript(payload, 12000);
+  const res = await fetchFromAppsScript(payload, 30000);
 
   if (res && (res.status === "fail" || res.status === "error")) {
     throw new Error(res.message || "Phone number already registered");
@@ -890,7 +927,7 @@ export async function adminAddAdmin(
     }
     return { success: false, message: res?.message || "Admin add karne me issue aaya. Check karein ke number pehle se registered donor hai." };
   } catch (err: any) {
-    return { success: false, message: err?.message || "Server connection error." };
+    return { success: false, message: cleanErrorMessage(err?.message) };
   }
 }
 
@@ -915,7 +952,7 @@ export async function adminRemoveAdmin(
     }
     return { success: false, message: res?.message || "Admin remove nahi ho saka." };
   } catch (err: any) {
-    return { success: false, message: err?.message || "Server connection error." };
+    return { success: false, message: cleanErrorMessage(err?.message) };
   }
 }
 
