@@ -1,8 +1,9 @@
 // Ghotki Blood Donors Network - Static App Shell Service Worker
-const CACHE_NAME = 'ghotki-blood-donors-shell-v1';
+const CACHE_NAME = 'ghotki-blood-donors-shell-v2';
 
-// Install: precache the base static app shell
+// Install: precache the base static app shell and skip waiting immediately
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       // Pre-cache root entry points
@@ -14,23 +15,31 @@ self.addEventListener('install', (event) => {
       });
     })
   );
-  // Do NOT skipWaiting immediately so active sessions are not interrupted;
-  // activates on next open as requested.
 });
 
-// Activate: clean up outdated static caches from previous builds
+// Activate: claim clients immediately and delete all outdated caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => {
-      return Promise.all(
-        keys.map((key) => {
-          if (key !== CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    Promise.all([
+      self.clients.claim(),
+      caches.keys().then((keys) => {
+        return Promise.all(
+          keys.map((key) => {
+            if (key !== CACHE_NAME) {
+              return caches.delete(key);
+            }
+          })
+        );
+      })
+    ])
   );
+});
+
+// Listen for message event from client to activate immediately if triggered
+self.addEventListener('message', (event) => {
+  if (event.data && (event.data.type === 'SKIP_WAITING' || event.data === 'SKIP_WAITING')) {
+    self.skipWaiting();
+  }
 });
 
 // Fetch: Cache-first strategy for app's static files, strictly NEVER cache API requests
