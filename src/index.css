@@ -1,0 +1,897 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  --color-blood: #dc143c;
+  --color-blood-dark: #8b0000;
+  --color-gold: #ffd700;
+}
+
+/* Global Mobile Scroll & Smoothness & Dark-Mode Inversion Immunity */
+:root {
+  color-scheme: light;
+}
+
+html {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  color-scheme: light;
+  background-color: #B71C1C;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #111827;
+  background-color: #B71C1C;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow normal text selection, cursor and typing in input, textarea and contenteditable elements */
+input,
+textarea,
+[contenteditable="true"],
+[contenteditable] {
+  -webkit-touch-callout: default;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Force light color-scheme and explicit text/caret colors across all form controls */
+input,
+select,
+textarea,
+button {
+  color-scheme: light !important;
+}
+
+input,
+textarea,
+select {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #dc143c !important;
+}
+
+/* Explicit placeholder styling for all inputs across all browsers */
+input::placeholder,
+textarea::placeholder,
+input::-webkit-input-placeholder,
+textarea::-webkit-input-placeholder,
+input::-moz-placeholder,
+textarea::-moz-placeholder {
+  color: #9ca3af !important;
+  -webkit-text-fill-color: #9ca3af !important;
+  opacity: 1 !important;
+}
+
+/* Explicit option element styling for native selects (prevents dark picker sheet inversion on Android) */
+select option {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+select option:checked {
+  background-color: #fef2f2 !important;
+  color: #dc143c !important;
+  -webkit-text-fill-color: #dc143c !important;
+}
+
+/* Override Android / Chrome / Safari WebKit Autofill behavior */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+textarea:-webkit-autofill:active,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus,
+select:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #dc143c !important;
+}
+
+/* Fix native date input elements on WebKit/Blink Android */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.75;
+  cursor: pointer;
+}
+
+input[type="date"]::-webkit-datetime-edit,
+input[type="date"]::-webkit-datetime-edit-fields-wrapper,
+input[type="date"]::-webkit-datetime-edit-text,
+input[type="date"]::-webkit-datetime-edit-month-field,
+input[type="date"]::-webkit-datetime-edit-day-field,
+input[type="date"]::-webkit-datetime-edit-year-field {
+  color: #111827 !important;
+  -webkit-text-fill-color: #111827 !important;
+}
+
+/* Scroll reveal helper transitions */
+.reveal-on-scroll {
+  opacity: 0;
+  transform: translate3d(0, 16px, 0);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.reveal-on-scroll.active {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+/* Lightweight Pure CSS Hero Entrance Animations */
+@keyframes heroFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes heroFadeOnly {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+.hero-fade-up {
+  animation: heroFadeUp 500ms ease-out both;
+  will-change: opacity, transform;
+}
+
+.hero-count-fade {
+  animation: heroFadeOnly 500ms ease-out 560ms both;
+  will-change: opacity;
+}
+
+.hero-delay-0 {
+  animation-delay: 0ms;
+}
+
+.hero-delay-1 {
+  animation-delay: 80ms;
+}
+
+.hero-delay-2 {
+  animation-delay: 160ms;
+}
+
+.hero-delay-3 {
+  animation-delay: 240ms;
+}
+
+.hero-delay-4 {
+  animation-delay: 320ms;
+}
+
+.hero-delay-5 {
+  animation-delay: 400ms;
+}
+
+.hero-delay-6 {
+  animation-delay: 480ms;
+}
+
+.hero-delay-7 {
+  animation-delay: 560ms;
+}
+
+.hero-delay-8 {
+  animation-delay: 640ms;
+}
+
+/* Floating Red Blood Cells classes - Static without animation or blur */
+.floating-cell {
+  position: absolute;
+  background: radial-gradient(circle at 35% 35%, #ff4d6d 0%, #dc143c 60%, #8b0000 100%);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Glassmorphism Preset Styling - Solid semi-opaque backgrounds without expensive backdrop-filter */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(229, 231, 235, 0.8);
+}
+
+.glass-panel-dark {
+  background: rgba(25, 8, 12, 0.96);
+  border: 1px solid rgba(220, 20, 60, 0.25);
+}
+
+/* Donor Card Content Visibility */
+.donor-card-contain {
+  content-visibility: auto;
+  contain-intrinsic-size: 0 210px;
+}
+
+/* Modal Pure-CSS Keyframe Open & Close Animations */
+@keyframes modalOverlayIn {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes modalOverlayOut {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes modalPopIn {
+  0% {
+    opacity: 0;
+    transform: translateY(28px) scale(0.88);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes modalPopOut {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.94);
+  }
+}
+
+.modal-overlay {
+  will-change: opacity;
+}
+
+.modal-overlay-enter {
+  animation: modalOverlayIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.modal-overlay-exit {
+  animation: modalOverlayOut 180ms ease-in both;
+  pointer-events: none;
+}
+
+.modal-panel {
+  will-change: opacity, transform;
+}
+
+.modal-panel-enter {
+  animation: modalPopIn 340ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.modal-panel-exit {
+  animation: modalPopOut 180ms ease-in both;
+  pointer-events: none;
+}
+
+/* =========================================================================
+   1. BUTTON PRESS FEEDBACK (Every button, link-button & action across the app)
+   ========================================================================= */
+button,
+[role="button"],
+a[href^="tel:"],
+a[href*="wa.me"],
+input[type="button"],
+input[type="submit"],
+.btn-press {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform, opacity;
+}
+
+button:active:not(:disabled),
+[role="button"]:active:not([aria-disabled="true"]),
+a[href^="tel:"]:active,
+a[href*="wa.me"]:active,
+input[type="button"]:active,
+input[type="submit"]:active,
+.btn-press:active {
+  transform: scale(0.92);
+  opacity: 0.85;
+  transition: transform 90ms ease-out, opacity 90ms ease-out;
+}
+
+/* =========================================================================
+   2. VIEW / SCREEN TRANSITIONS
+   ========================================================================= */
+@keyframes screenEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.view-transition-enter {
+  animation: screenEnter 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.view-transition-exit {
+  opacity: 0;
+  transform: scale(0.97);
+  transition: opacity 180ms ease-in, transform 180ms ease-in;
+  pointer-events: none;
+}
+
+/* =========================================================================
+   3. DROPDOWNS (CustomSelect everywhere)
+   ========================================================================= */
+.dropdown-panel-anim {
+  opacity: 0;
+  will-change: opacity, transform;
+  transform-origin: top center;
+  transform: scaleY(0.85) translateY(-8px);
+  transition: opacity 160ms ease-in, transform 160ms ease-in;
+}
+
+.dropdown-panel-anim.dropdown-placement-bottom {
+  transform-origin: top center;
+  transform: scaleY(0.85) translateY(-8px);
+}
+
+.dropdown-panel-anim.dropdown-placement-top {
+  transform-origin: bottom center;
+  transform: scaleY(0.85) translateY(8px);
+}
+
+.dropdown-panel-anim.dropdown-visible {
+  opacity: 1;
+  transform: scaleY(1) translateY(0);
+  transition: opacity 240ms cubic-bezier(0.16, 1, 0.3, 1), transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dropdown-chevron-anim {
+  transition: transform 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.dropdown-chevron-anim.dropdown-open {
+  transform: rotate(180deg);
+}
+
+.dropdown-chevron-anim.dropdown-closed {
+  transform: rotate(0deg);
+  transition: transform 160ms ease-in;
+}
+
+/* =========================================================================
+   4. MOBILE HAMBURGER MENU & ICON
+   ========================================================================= */
+.mobile-menu-overlay {
+  opacity: 0;
+  transition: opacity 200ms ease-in;
+  will-change: opacity;
+}
+
+.mobile-menu-overlay.mobile-menu-visible {
+  opacity: 1;
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-menu-panel {
+  opacity: 0;
+  transform: translateY(-24px);
+  will-change: opacity, transform;
+  transition: opacity 200ms ease-in, transform 200ms ease-in;
+}
+
+.mobile-menu-panel.mobile-menu-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 320ms cubic-bezier(0.16, 1, 0.3, 1), transform 320ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mobile-menu-panel.mobile-menu-hidden {
+  opacity: 0;
+  transform: translateY(-24px);
+  transition: opacity 200ms ease-in, transform 200ms ease-in;
+}
+
+@keyframes menuItemCascade {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-menu-visible .mobile-menu-item {
+  animation: menuItemCascade 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.mobile-menu-visible .mobile-menu-item-0 { animation-delay: 0ms; }
+.mobile-menu-visible .mobile-menu-item-1 { animation-delay: 50ms; }
+.mobile-menu-visible .mobile-menu-item-2 { animation-delay: 100ms; }
+.mobile-menu-visible .mobile-menu-item-3 { animation-delay: 150ms; }
+.mobile-menu-visible .mobile-menu-item-4 { animation-delay: 200ms; }
+.mobile-menu-visible .mobile-menu-item-5 { animation-delay: 250ms; }
+
+.hamburger-icon-menu {
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+.hamburger-icon-x {
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+
+/* =========================================================================
+   5. ADMIN PANEL TABS & PILL TRANSITIONS
+   ========================================================================= */
+@keyframes tabFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.tab-content-anim {
+  animation: tabFadeUp 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.tab-pill-btn {
+  transition: background-color 200ms ease-out, color 200ms ease-out, box-shadow 200ms ease-out, transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: background-color, color, box-shadow, transform, opacity;
+}
+
+/* =========================================================================
+   6. CARDS APPEARING (Staggered upward fade on load)
+   ========================================================================= */
+@keyframes listFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.list-item-enter {
+  animation: listFadeUp 400ms ease-out both;
+  will-change: opacity, transform;
+}
+
+.list-stagger-0 { animation-delay: 0ms; }
+.list-stagger-1 { animation-delay: 60ms; }
+.list-stagger-2 { animation-delay: 120ms; }
+.list-stagger-3 { animation-delay: 180ms; }
+.list-stagger-4 { animation-delay: 240ms; }
+.list-stagger-5 { animation-delay: 300ms; }
+.list-stagger-none { animation-delay: 0ms; }
+
+/* =========================================================================
+   7. READY TO DONATE TOGGLE
+   ========================================================================= */
+.toggle-track {
+  transition: background-color 200ms ease-out, opacity 200ms ease-out;
+  will-change: background-color;
+}
+
+.toggle-knob {
+  transition: transform 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  will-change: transform;
+}
+
+/* =========================================================================
+   8. TOAST ANIMATIONS & PORTAL
+   ========================================================================= */
+#toast-portal-container {
+  position: fixed !important;
+  top: 80px !important;
+  z-index: 999999 !important;
+  transform: none !important;
+  filter: none !important;
+  perspective: none !important;
+  will-change: auto !important;
+}
+
+@keyframes toastSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toastSlideIn 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: opacity, transform;
+}
+
+.toast-exit {
+  opacity: 0;
+  transform: translateY(-12px);
+  transition: opacity 180ms ease-in, transform 180ms ease-in;
+  pointer-events: none;
+}
+
+/* Complete Scrollbar Removal (Native App-like Experience) */
+* {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+*::-webkit-scrollbar,
+::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+html, body {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+/* Gradient background animation */
+.pink-red-gradient {
+  background: linear-gradient(135deg, #fff5f5 0%, #fff0f2 50%, #ffe3e8 100%);
+}
+
+/* Splash Screen Keyframes & Utilities (GPU Optimized) */
+@keyframes splashFadeUp {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0) scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes splashGlowAura {
+  0%, 100% {
+    transform: translate3d(-50%, -50%, 0) scale(0.95);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate3d(-50%, -50%, 0) scale(1.1);
+    opacity: 0.65;
+  }
+}
+
+@keyframes splashProgressBar {
+  0% {
+    transform: scaleX(0.04);
+  }
+  30% {
+    transform: scaleX(0.35);
+  }
+  70% {
+    transform: scaleX(0.82);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+
+@keyframes splashShimmer {
+  0% {
+    background-position: -200% center;
+  }
+  100% {
+    background-position: 200% center;
+  }
+}
+
+.animate-splash-fade-1 {
+  animation: splashFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+  transform: translateZ(0);
+}
+
+.animate-splash-fade-2 {
+  animation: splashFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 0.85s both;
+  transform: translateZ(0);
+}
+
+.animate-splash-fade-3 {
+  animation: splashFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 1.55s both;
+  transform: translateZ(0);
+}
+
+.animate-splash-fade-4 {
+  animation: splashFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 2.25s both;
+  transform: translateZ(0);
+}
+
+.animate-splash-fade-5 {
+  animation: splashFadeUp 0.9s cubic-bezier(0.16, 1, 0.3, 1) 2.85s both;
+  transform: translateZ(0);
+}
+
+.animate-splash-glow {
+  animation: splashGlowAura 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+.animate-splash-progress {
+  transform-origin: left center;
+  animation: splashProgressBar 4.2s cubic-bezier(0.2, 0.85, 0.2, 1) forwards;
+  will-change: transform;
+}
+
+.animate-splash-shimmer {
+  background-size: 200% auto;
+  animation: splashShimmer 3s linear infinite;
+}
+
+/* Pause all animations when tab is hidden */
+html.tab-hidden *,
+html.tab-hidden *::before,
+html.tab-hidden *::after {
+  animation-play-state: paused !important;
+}
+
+/* Blood Fill Loading Button Animation */
+@keyframes fillUp {
+  0%   { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+.btn-loading {
+  position: relative;
+  overflow: hidden;
+  background: #5e0d0d !important;
+  opacity: 1 !important;
+  cursor: not-allowed !important;
+}
+
+.btn-loading .liquid {
+  position: absolute;
+  inset: 0;
+  background: #B71C1C;
+  transform-origin: bottom;
+  animation: fillUp 2s infinite cubic-bezier(.45, 0, .25, 1);
+}
+
+.btn-loading .btn-label {
+  position: relative;
+  z-index: 1;
+  color: #ffffff !important;
+}
+
+/* ==================== 12. STEP WIZARD TRANSITIONS (Transform & Opacity Only) ==================== */
+@keyframes stepSlideInRight {
+  0% {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes stepSlideInLeft {
+  0% {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes stepSlideOutLeft {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-24px, 0, 0);
+  }
+}
+
+@keyframes stepSlideOutRight {
+  0% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(24px, 0, 0);
+  }
+}
+
+.step-slide-in-right {
+  animation: stepSlideInRight 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.step-slide-in-left {
+  animation: stepSlideInLeft 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.step-slide-out-left {
+  animation: stepSlideOutLeft 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.step-slide-out-right {
+  animation: stepSlideOutRight 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes optionalExpandAnim {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, -8px, 0);
+  }
+  100% {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-optional-expand {
+  animation: optionalExpandAnim 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes stepActiveScale {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.step-circle-active {
+  animation: stepActiveScale 250ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes checkMarkScaleIn {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.check-mark-animate {
+  animation: checkMarkScaleIn 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+.btn-arrow-slide {
+  transition: transform 180ms ease;
+  will-change: transform;
+}
+
+button:active .btn-arrow-slide,
+.btn-press:active .btn-arrow-slide {
+  transform: translate3d(4px, 0, 0);
+}
+
+
+/* Accessibility: prefers-reduced-motion support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .btn-loading .liquid {
+    animation: none !important;
+    display: none !important;
+  }
+
+  .animate-drip,
+  .animate-pulse-glow,
+  .animate-pulse-gold,
+  .animate-splash-glow,
+  .animate-splash-shimmer,
+  .floating-cell,
+  .animate-pulse,
+  .animate-ping,
+  .hero-fade-up,
+  .hero-count-fade,
+  .modal-overlay,
+  .modal-overlay-enter,
+  .modal-overlay-exit,
+  .modal-panel,
+  .modal-panel-enter,
+  .modal-panel-exit,
+  .modal-panel-anim,
+  .view-transition-enter,
+  .view-transition-exit,
+  .dropdown-panel-anim,
+  .dropdown-panel-anim.dropdown-visible,
+  .tab-content-anim,
+  .tab-pill-btn,
+  .list-item-enter,
+  .toast-enter,
+  .toast-exit,
+  .toggle-track,
+  .toggle-knob,
+  .mobile-menu-panel,
+  .mobile-menu-item,
+  .hamburger-icon-menu,
+  .hamburger-icon-x,
+  button,
+  [role="button"],
+  a[href^="tel:"],
+  a[href*="wa.me"],
+  input[type="button"],
+  input[type="submit"],
+  .btn-press {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+  }
+}
+
+
+

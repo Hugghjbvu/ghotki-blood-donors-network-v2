@@ -1,0 +1,6 @@
+{
+  "name": "Ghotki Blood Donors Network",
+  "description": "A premium, life-saving blood donation connection platform for Ghotki District, Sindh, Pakistan, connecting blood donors with patients and emergency delivery/accident cases.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
