@@ -59,7 +59,10 @@ import {
   getDonationRecords,
   addDonationRecord,
   deleteDonationRecord,
-  getCachedLiveDonors
+  getCachedLiveDonors,
+  cacheLiveDonors,
+  filterDonorsList,
+  fetchPublicDonorsFromFirebase
 } from "./firebase";
 
 import FloatingParticles from "./components/FloatingParticles";
@@ -90,6 +93,36 @@ const REG_STEPS = [
   { id: 2, title: "Blood aur ilaqa" },
   { id: 3, title: "Account banayein" },
 ];
+
+/**
+ * Deep comparison helper to check if two donor arrays are equivalent.
+ * Prevents redundant re-renders and layout shifts during silent background polling.
+ */
+function areDonorListsEqual(a: Donor[], b: Donor[]): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const da = a[i];
+    const db = b[i];
+    if (
+      da.id !== db.id ||
+      da.name !== db.name ||
+      da.bloodGroup !== db.bloodGroup ||
+      da.city !== db.city ||
+      da.primaryPhone !== db.primaryPhone ||
+      da.secondaryPhone !== db.secondaryPhone ||
+      da.willingToDonate !== db.willingToDonate ||
+      da.status !== db.status ||
+      da.lastDonationDate !== db.lastDonationDate ||
+      da.address !== db.address ||
+      da.fatherName !== db.fatherName
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export default function App() {
   // Global pause for CSS animations when tab is hidden
@@ -170,15 +203,6 @@ export default function App() {
   const [savedAdminPassword, setSavedAdminPassword] = useState<string>("");
 
   // Stats / Metrics & Admin pre-fetch cache
-  // Hydrate searchResults and donor count synchronously from cache on first render
-  const [totalRegistered, setTotalRegistered] = useState<number>(() => {
-    try {
-      const cached = getCachedLiveDonors();
-      return Array.isArray(cached) ? cached.length : 0;
-    } catch {
-      return 0;
-    }
-  });
   const [isMetricsLoading, setIsMetricsLoading] = useState<boolean>(() => {
     try {
       const cached = getCachedLiveDonors();
@@ -209,6 +233,10 @@ export default function App() {
     }
   });
   const [hasSearched, setHasSearched] = useState<boolean>(false);
+
+  // Active filters currently applied to displayed searchResults
+  const appliedBloodRef = useRef<string>("");
+  const appliedCityRef = useRef<string>("");
 
   // Pagination for smooth rendering with large lists (initial 20, load next 20 on scroll)
   const [visibleDonorCount, setVisibleDonorCount] = useState<number>(20);
@@ -369,12 +397,17 @@ export default function App() {
     }
 
     try {
+      appliedBloodRef.current = "";
+      appliedCityRef.current = "";
       // Single call to fetch donors list and derive metrics count
       const results = await searchDonors("", "");
-      const count = Array.isArray(results) ? results.length : 0;
-      setTotalRegistered(count);
-      // Update silently with fresh list when it arrives
-      setSearchResults(results);
+      if (Array.isArray(results)) {
+        cacheLiveDonors(results);
+        setSearchResults((prev) => {
+          if (areDonorListsEqual(prev, results)) return prev;
+          return results;
+        });
+      }
     } catch {
       // Silently handle
     } finally {
@@ -722,6 +755,89 @@ export default function App() {
     };
   }, [view, currentUser?.id, savedAdminPassword, isEditingProfile, addToast]);
 
+  // Silent background refresh for landing page:
+  // Re-fetch public active donors from Firebase every 60 seconds while landing page is visible,
+  // and re-fetch immediately whenever browser tab becomes visible again after being hidden.
+  useEffect(() => {
+    if (view !== "LANDING") {
+      return;
+    }
+
+    let intervalId: NodeJS.Timeout | null = null;
+    let isFetching = false;
+
+    const performSilentRefresh = async () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+      if (isFetching) return;
+      isFetching = true;
+
+      try {
+        const freshActiveDonors = await fetchPublicDonorsFromFirebase();
+        if (freshActiveDonors && Array.isArray(freshActiveDonors)) {
+          // Overwrite the cache with the fresh active list
+          cacheLiveDonors(freshActiveDonors);
+
+          // Maintain user's current search filters without disturbing them
+          const currentBlood = appliedBloodRef.current;
+          const currentCity = appliedCityRef.current;
+          const nextList = (currentBlood || currentCity)
+            ? filterDonorsList(freshActiveDonors, currentBlood, currentCity)
+            : freshActiveDonors;
+
+          // Only update state if the returned data actually differs from what is already shown
+          setSearchResults((prev) => {
+            if (areDonorListsEqual(prev, nextList)) {
+              return prev;
+            }
+            return nextList;
+          });
+        }
+      } catch {
+        // Completely silent on background refresh errors
+      } finally {
+        isFetching = false;
+      }
+    };
+
+    const startTimer = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(performSilentRefresh, 60000);
+    };
+
+    const stopTimer = () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    // If visible on mount, start 60s interval
+    if (typeof document !== "undefined" && !document.hidden) {
+      startTimer();
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        // Re-fetch immediately whenever browser tab becomes visible again after being hidden
+        performSilentRefresh();
+        // Restart 60s interval
+        startTimer();
+      } else {
+        // Stop the interval when the tab is hidden
+        stopTimer();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      stopTimer();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [view]);
+
   // Perform public search
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -729,6 +845,9 @@ export default function App() {
       addToast("error", "Internet connection nahi hai");
       return;
     }
+
+    appliedBloodRef.current = selectedBlood;
+    appliedCityRef.current = selectedCity;
 
     setVisibleDonorCount(20);
     setIsSearching(true);
@@ -837,6 +956,7 @@ export default function App() {
 
     try {
       const cleanPhone = regPrimaryPhone.replace(/[^0-9]/g, "");
+      const userEnteredPass = regPassword;
 
       // Proceed saving with PENDING status (Admin approval required)
       const submittedData = {
@@ -851,7 +971,7 @@ export default function App() {
         status: UserStatus.PENDING,
         registeredAt: Date.now(),
         willingToDonate: true,
-        password: regPassword
+        password: userEnteredPass
       };
 
       // Register the donor via secure Apps Script API
@@ -861,9 +981,7 @@ export default function App() {
         throw new Error("Registration could not be completed.");
       }
 
-      addToast("success", "Admin approval ka intezar karein");
-      
-      // Clear inputs
+      // Clear registration inputs
       setRegName("");
       setRegFatherName("");
       setRegAddress("");
@@ -877,13 +995,70 @@ export default function App() {
 
       // Refresh counters and landing donors
       loadLandingData();
-      
-      if (typeof window !== "undefined") {
-        window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+
+      // Immediately call login action with the phone number and password just entered
+      let autoLoginSuccess = false;
+      try {
+        const authResult = await authenticateDonor(cleanPhone, userEnteredPass);
+
+        if (authResult.success && authResult.donor) {
+          const donorObj = authResult.donor;
+          // Create session object exactly as a normal login does
+          const sessionUser: any = { 
+            ...donorObj,
+            password: userEnteredPass,
+            adminPass: userEnteredPass
+          };
+
+          localStorage.setItem("ghotki_donor_session", JSON.stringify(sessionUser));
+          setCurrentUser(sessionUser);
+          setSavedAdminPassword(userEnteredPass);
+
+          // Pre-populate profile editor fields
+          setEditName(sessionUser.name);
+          setEditFatherName(sessionUser.fatherName || "");
+          setEditAddress(sessionUser.address || "");
+          setEditCity(sessionUser.city);
+          setEditBloodGroup(sessionUser.bloodGroup);
+          setEditSecondaryPhone(sessionUser.secondaryPhone || "");
+          setEditLastDonation(sessionUser.lastDonationDate || "");
+          setEditStatus(sessionUser.status || UserStatus.PENDING);
+          setEditWillingToDonate(sessionUser.willingToDonate ?? true);
+          setEditPassword("");
+          setCurrentPassword("");
+
+          // Clear login inputs
+          setLoginPhone("");
+          setLoginPassword("");
+          setLoginError("");
+
+          if (typeof window !== "undefined") {
+            window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+          }
+
+          // Take user straight to donor dashboard
+          setView("DASHBOARD");
+          addToast("success", "Registration mukammal — admin approval ka intezar karein");
+          autoLoginSuccess = true;
+        }
+      } catch (loginErr) {
+        console.error("Auto-login error following registration:", loginErr);
+        autoLoginSuccess = false;
       }
 
-      // Redirect to login page
-      setView("LOGIN");
+      // If automatic login fails for any reason, fall back to current behaviour
+      if (!autoLoginSuccess) {
+        setLoginPhone(cleanPhone);
+        setLoginPassword("");
+        addToast("success", "Admin approval ka intezar karein");
+        
+        if (typeof window !== "undefined") {
+          window.scrollTo({ top: 0, left: 0, behavior: "instant" as ScrollBehavior });
+        }
+
+        // Redirect to login page with phone pre-filled
+        setView("LOGIN");
+      }
     } catch (err: any) {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         addToast("error", "Internet connection nahi hai");
@@ -1018,7 +1193,13 @@ export default function App() {
     const activeDonors = updatedDonors.filter(
       (d) => String(d.status || "").trim().toUpperCase() === "ACTIVE" || d.status === UserStatus.ACTIVE
     );
-    setTotalRegistered(activeDonors.length);
+    cacheLiveDonors(activeDonors);
+    const currentBlood = appliedBloodRef.current;
+    const currentCity = appliedCityRef.current;
+    const nextList = (currentBlood || currentCity)
+      ? filterDonorsList(activeDonors, currentBlood, currentCity)
+      : activeDonors;
+    setSearchResults((prev) => areDonorListsEqual(prev, nextList) ? prev : nextList);
   }, []);
 
   const handleAdminUnauthorized = useCallback(() => {
@@ -1728,11 +1909,11 @@ export default function App() {
 
                   <h3 className="text-gray-500 font-mono text-xs uppercase tracking-widest font-medium">ACTIVE DONORS</h3>
                   <div className="mt-2 text-4xl sm:text-5xl text-blood flex items-baseline gap-1.5 min-h-[48px] hero-count-fade">
-                    {isMetricsLoading ? (
+                    {isMetricsLoading && searchResults.length === 0 ? (
                       <div className="h-10 w-24 bg-rose-200/50 rounded-xl my-1" />
                     ) : (
                       <>
-                        <Counter value={totalRegistered} />
+                        <Counter value={searchResults.length} />
                         <span className="text-gray-400 font-sans text-lg font-bold">+</span>
                       </>
                     )}
@@ -1866,6 +2047,9 @@ export default function App() {
                     onClick={() => {
                       setSelectedBlood("");
                       setSelectedCity("");
+                      appliedBloodRef.current = "";
+                      appliedCityRef.current = "";
+                      setHasSearched(false);
                       setVisibleDonorCount(20);
                       loadLandingData();
                     }}
@@ -2456,11 +2640,24 @@ export default function App() {
             {(currentUser.status || "").toLowerCase() === "pending" ? (
               <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-xs">
                 <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-sm">Aapka account admin approval ka intezar kar raha hai</h4>
-                  <p className="text-xs text-amber-800 leading-relaxed mt-0.5 font-medium">
-                    Approve hone ke baad aap search list me nazar aayenge. Admin verification ke baad aapka status active kardia jayega.
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-sm sm:text-base text-amber-950">Approval ka intezar</h4>
+                  <p className="text-xs sm:text-sm text-amber-800 leading-relaxed mt-1 font-medium">
+                    Aap ka account ban gaya hai. Admin ke approve karne ke baad aap Active donors ki list mein nazar aayenge.
                   </p>
+                  <div className="mt-3">
+                    <a
+                      href={`https://wa.me/923352213351?text=${encodeURIComponent(
+                        `Assalam-o-Alaikum Admin,\nMera account Ghotki Blood Donors Network par pending approval hai.\nNaam: ${currentUser.name || ""}\nMobile: ${currentUser.primaryPhone || ""}\nBlood Group: ${currentUser.bloodGroup || ""}\nCity: ${currentUser.city || ""}\n\nBaraye meharbani mera account review / approve kar dein. Shukriya!`
+                      )}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-extrabold text-xs transition-all shadow-xs btn-press"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 fill-white shrink-0" />
+                      <span>Admin se rabta karein</span>
+                    </a>
+                  </div>
                 </div>
               </div>
             ) : (currentUser.status || "").toLowerCase() === "rejected" ? (

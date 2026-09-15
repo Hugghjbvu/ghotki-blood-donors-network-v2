@@ -13,7 +13,7 @@ export const SUPER_ADMIN_PHONE = "03018597734";
 /**
  * Filter an array of donors by status, blood group, and city
  */
-function filterDonorsList(donors: Donor[], bloodGroup: string, city: string): Donor[] {
+export function filterDonorsList(donors: Donor[], bloodGroup: string, city: string): Donor[] {
   return donors.filter((donor) => {
     if (!donor) return false;
     const statusStr = String(donor.status || "").trim().toUpperCase();
@@ -34,6 +34,36 @@ function filterDonorsList(donors: Donor[], bloodGroup: string, city: string): Do
 
     return true;
   });
+}
+
+/**
+ * Directly fetch the public active donors from Firebase Realtime Database (/public.json).
+ * Completely silent background fetch, returns null on failure without throwing.
+ */
+export async function fetchPublicDonorsFromFirebase(): Promise<Donor[] | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+
+    const response = await fetch(FIREBASE_RTDB_PUBLIC_URL, {
+      method: "GET",
+      signal: controller.signal
+    });
+
+    clearTimeout(timer);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data !== null && data !== undefined) {
+        const donorsList = parseFirebaseDonors(data);
+        const activeList = filterDonorsList(donorsList, "", "");
+        return activeList;
+      }
+    }
+  } catch {
+    // Silent fail
+  }
+  return null;
 }
 
 /**
