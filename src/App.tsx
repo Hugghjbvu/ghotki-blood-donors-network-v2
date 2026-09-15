@@ -15,6 +15,7 @@ import {
   Settings, 
   CheckCircle, 
   AlertTriangle, 
+  AlertCircle,
   Info, 
   ListFilter,
   Users,
@@ -78,6 +79,7 @@ import SplashScreen from "./components/SplashScreen";
 import DonorCard from "./components/DonorCard";
 import HeroTypewriter from "./components/HeroTypewriter";
 import ModalDialog from "./components/ModalDialog";
+import EmergencyBloodRequest from "./components/EmergencyBloodRequest";
 
 // Phone formatter for Pakistan dialers (e.g. 03xx -> 923xx)
 function sanitizeWhatsAppPhone(phone: any): string {
@@ -218,6 +220,14 @@ export default function App() {
   const [selectedBlood, setSelectedBlood] = useState<string>("");
   const [selectedCity, setSelectedCity] = useState<string>("");
   const [searchResults, setSearchResults] = useState<Donor[]>(() => {
+    try {
+      const cached = getCachedLiveDonors();
+      return Array.isArray(cached) && cached.length > 0 ? cached : [];
+    } catch {
+      return [];
+    }
+  });
+  const [allActiveDonors, setAllActiveDonors] = useState<Donor[]>(() => {
     try {
       const cached = getCachedLiveDonors();
       return Array.isArray(cached) && cached.length > 0 ? cached : [];
@@ -405,6 +415,10 @@ export default function App() {
       const results = await searchDonors("", "");
       if (Array.isArray(results)) {
         cacheLiveDonors(results);
+        setAllActiveDonors((prev) => {
+          if (areDonorListsEqual(prev, results)) return prev;
+          return results;
+        });
         setSearchResults((prev) => {
           if (areDonorListsEqual(prev, results)) return prev;
           return results;
@@ -780,6 +794,10 @@ export default function App() {
         if (freshActiveDonors && Array.isArray(freshActiveDonors)) {
           // Overwrite the cache with the fresh active list
           cacheLiveDonors(freshActiveDonors);
+          setAllActiveDonors((prev) => {
+            if (areDonorListsEqual(prev, freshActiveDonors)) return prev;
+            return freshActiveDonors;
+          });
 
           // Maintain user's current search filters without disturbing them
           const currentBlood = appliedBloodRef.current;
@@ -1259,6 +1277,7 @@ export default function App() {
       (d) => String(d.status || "").trim().toUpperCase() === "ACTIVE" || d.status === UserStatus.ACTIVE
     );
     cacheLiveDonors(activeDonors);
+    setAllActiveDonors((prev) => areDonorListsEqual(prev, activeDonors) ? prev : activeDonors);
     const currentBlood = appliedBloodRef.current;
     const currentCity = appliedCityRef.current;
     const nextList = (currentBlood || currentCity)
@@ -2004,6 +2023,36 @@ export default function App() {
               </div>
             </div>
 
+            {/* Emergency Blood Request Banner Card */}
+            <div className="glass-panel p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-md relative overflow-hidden bg-gradient-to-br from-rose-50/70 via-white to-white">
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold" />
+              
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="space-y-0.5 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-blood shrink-0" />
+                    <h2 className="text-base sm:text-lg font-display font-extrabold text-gray-900 tracking-tight whitespace-nowrap">
+                      Foran Khoon Chahiye?
+                    </h2>
+                  </div>
+                  <p className="text-xs text-gray-600 font-medium whitespace-nowrap">
+                    Blood group chunein, donors se rabta karein.
+                  </p>
+                </div>
+
+                <div className="shrink-0 flex items-center pt-1 sm:pt-0">
+                  <button
+                    type="button"
+                    onClick={() => setView("EMERGENCY_REQUEST")}
+                    className="w-full sm:w-auto px-4 py-2.5 bg-gradient-to-r from-blood to-blood-dark text-white rounded-xl font-display font-extrabold text-xs shadow-md hover:shadow-blood/20 transition-all flex items-center justify-center gap-1.5 cursor-pointer btn-press whitespace-nowrap"
+                  >
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Emergency Request</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Core SEARCH SECTION Box */}
             <div id="search-anchor" className="scroll-mt-24 relative z-20">
               <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/60 shadow-xl relative overflow-visible z-20">
@@ -2154,6 +2203,15 @@ export default function App() {
             </div>
 
           </div>
+        )}
+
+        {/* ==================== EMERGENCY BLOOD REQUEST ==================== */}
+        {view === "EMERGENCY_REQUEST" && (
+          <EmergencyBloodRequest
+            donors={allActiveDonors.length > 0 ? allActiveDonors : searchResults}
+            onViewDetails={(donor) => setViewingDonor(donor)}
+            onBack={() => setView("LANDING")}
+          />
         )}
 
         {/* ==================== 2. REGISTRATION PAGE ==================== */}

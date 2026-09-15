@@ -2,13 +2,14 @@ import React from "react";
 import { MapPin, Calendar, MessageCircle } from "lucide-react";
 import { Donor, UserStatus } from "../types";
 
-interface DonorCardProps {
+export interface DonorCardProps {
   donor: Donor;
   onViewDetails: (donor: Donor) => void;
   index?: number;
+  customWhatsAppText?: string;
 }
 
-function sanitizeWhatsAppPhone(phone: any): string {
+export function sanitizeWhatsAppPhone(phone: any): string {
   if (phone === null || phone === undefined) return "";
   let cleaned = String(phone).replace(/[^0-9]/g, "");
   if (cleaned.startsWith("0")) {
@@ -17,13 +18,15 @@ function sanitizeWhatsAppPhone(phone: any): string {
   return cleaned;
 }
 
-const DonorCard = React.memo(function DonorCard({ donor, onViewDetails, index = 0 }: DonorCardProps) {
+const DonorCard = React.memo(function DonorCard({ donor, onViewDetails, index = 0, customWhatsAppText }: DonorCardProps) {
   const cleanPhone = sanitizeWhatsAppPhone(donor.primaryPhone || (donor as any).phone);
   const isWilling = donor.willingToDonate !== false && donor.status === UserStatus.ACTIVE;
   const fatherName = donor.fatherName ? String(donor.fatherName).trim() : "";
   const address = donor.address ? String(donor.address).trim() : "";
   const lastDonation = donor.lastDonationDate ? String(donor.lastDonationDate).trim() : "";
   const staggerClass = index < 6 ? `list-stagger-${index}` : "list-stagger-none";
+  const defaultWhatsAppText = `Assalam o Alaikum ${donor.name}, mujhe Ghotki Blood Donors Network se aapke blood (Group: ${donor.bloodGroup}) ki zaroorat hai. Please rabta karein.`;
+  const messageToSend = customWhatsAppText || defaultWhatsAppText;
 
   return (
     <div
@@ -102,9 +105,7 @@ const DonorCard = React.memo(function DonorCard({ donor, onViewDetails, index = 
 
         {/* Main Contact action button */}
         <a
-          href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(
-            `Assalam o Alaikum ${donor.name}, mujhe Ghotki Blood Donors Network se aapke blood (Group: ${donor.bloodGroup}) ki zaroorat hai. Please rabta karein.`
-          )}`}
+          href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(messageToSend)}`}
           target="_blank"
           rel="referrer noopener noreferrer"
           className="w-full py-2 px-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-display font-bold text-xs shadow-sm shadow-emerald-500/10 flex items-center justify-center gap-1.5 transition-transform text-center whitespace-nowrap btn-press"

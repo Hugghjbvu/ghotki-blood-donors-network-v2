@@ -52,7 +52,7 @@ export interface AdminRecord {
   isSuper?: boolean;
 }
 
-export type AppView = "LANDING" | "REGISTER" | "LOGIN" | "DASHBOARD" | "ADMIN";
+export type AppView = "LANDING" | "REGISTER" | "LOGIN" | "DASHBOARD" | "ADMIN" | "EMERGENCY_REQUEST";
 
 export interface ToastMessage {
   id: string;
