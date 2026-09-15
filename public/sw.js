@@ -1,5 +1,7 @@
 // Ghotki Blood Donors Network - Static App Shell Service Worker
-const CACHE_NAME = 'ghotki-blood-donors-shell-v2';
+// Injected build version placeholder (replaced dynamically during build)
+const SW_VERSION = '__SW_BUILD_VERSION__';
+const CACHE_NAME = `ghotki-blood-donors-shell-${SW_VERSION}`;
 
 // Install: precache the base static app shell and skip waiting immediately
 self.addEventListener('install', (event) => {
@@ -42,7 +44,7 @@ self.addEventListener('message', (event) => {
   }
 });
 
-// Fetch: Cache-first strategy for app's static files, strictly NEVER cache API requests
+// Fetch handler: Network-first with timeout for HTML/navigation; Cache-first for hashed assets
 self.addEventListener('fetch', (event) => {
   const request = event.request;
 
@@ -54,7 +56,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
 
   // STRICT REQUIREMENT: NEVER cache API responses.
-  // Exclude all requests to script.google.com and to firebaseio.com entirely.
+  // Exclude all requests to script.google.com, firebaseio.com, googleapis.com, and local /api/ routes
   if (
     url.hostname.includes('script.google.com') ||
     url.hostname.includes('firebaseio.com') ||
@@ -73,49 +75,82 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Determine if it is a static build asset or navigation request
   const isNavigation = request.mode === 'navigate';
+  const isHtml = isNavigation || url.pathname.endsWith('.html') || url.pathname.endsWith('/');
+
+  // 1. NAVIGATION & HTML REQUESTS: NETWORK-FIRST WITH 3-SECOND TIMEOUT
+  if (isHtml) {
+    event.respondWith(
+      new Promise((resolve) => {
+        let timedOut = false;
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, 3000);
+
+        fetch(request, { signal: controller.signal })
+          .then((networkResponse) => {
+            clearTimeout(timeoutId);
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
+              const responseToCache = networkResponse.clone();
+              caches.open(CACHE_NAME).then((cache) => {
+                cache.put(request, responseToCache);
+              }).catch(() => {});
+            }
+            resolve(networkResponse);
+          })
+          .catch(() => {
+            clearTimeout(timeoutId);
+            // Network failed or timed out (e.g. offline): fallback to cached index.html
+            caches.match(request).then((cachedResponse) => {
+              if (cachedResponse) {
+                resolve(cachedResponse);
+                return;
+              }
+              // Fallback to cached root entry if specific URL match failed
+              caches.match('./index.html').then((indexCached) => {
+                if (indexCached) {
+                  resolve(indexCached);
+                } else {
+                  caches.match('./').then((rootCached) => {
+                    resolve(rootCached || Response.error());
+                  });
+                }
+              });
+            });
+          });
+      })
+    );
+    return;
+  }
+
+  // 2. STATIC ASSETS & HASHED FILES: CACHE-FIRST
+  // Vite puts build assets with unique content hashes in /assets/ (e.g. /assets/index-BBBtxANl.js)
   const isStaticAsset = (
-    isNavigation ||
-    /\.(html|js|mjs|css|png|jpg|jpeg|svg|webp|ico|woff|woff2|ttf|json)$/i.test(url.pathname) ||
-    url.pathname.includes('/assets/')
+    isFont ||
+    url.pathname.includes('/assets/') ||
+    /\.(js|mjs|css|png|jpg|jpeg|svg|webp|ico|woff|woff2|ttf|json)$/i.test(url.pathname)
   );
 
   if (!isStaticAsset) {
     return;
   }
 
-  // Cache-First strategy:
-  // 1. Immediately return cached response if available (instant loading on repeat visits).
-  // 2. Concurrently fetch fresh version in background and update cache if new build deployed.
-  // 3. If cache miss, wait for network, cache the result, and return it.
   event.respondWith(
     caches.open(CACHE_NAME).then((cache) => {
       return cache.match(request).then((cachedResponse) => {
-        // Background network fetch for revalidation & cache updating
-        const networkFetchPromise = fetch(request)
-          .then((networkResponse) => {
-            if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
-              cache.put(request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-          .catch((err) => {
-            // If offline on navigation, fallback to cached index.html
-            if (isNavigation) {
-              return cache.match('./index.html') || cache.match('./');
-            }
-            throw err;
-          });
-
-        // Return cached asset immediately if found, else wait for network
         if (cachedResponse) {
-          // Trigger background update silently
-          networkFetchPromise.catch(() => {});
           return cachedResponse;
         }
 
-        return networkFetchPromise;
+        // Cache miss: fetch from network, cache it, and return
+        return fetch(request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200 && networkResponse.type !== 'opaque') {
+            cache.put(request, networkResponse.clone());
+          }
+          return networkResponse;
+        });
       });
     })
   );

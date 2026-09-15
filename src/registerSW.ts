@@ -1,3 +1,4 @@
+// In-memory flag to prevent double reloads within the same page load
 let isReloading = false;
 let controllerListenerAttached = false;
 
@@ -6,7 +7,7 @@ let controllerListenerAttached = false;
  * - Non-blocking: executes after page load
  * - Fully compatible with standard browsers and Android WebViews
  * - Checks for background updates to static build assets
- * - Immediately activates new service worker updates and silently reloads once per session
+ * - When a new version activates, performs an in-memory guarded reload so every deploy reaches the user immediately
  */
 export function registerServiceWorker(): void {
   if (typeof window === "undefined") return;
@@ -22,20 +23,13 @@ export function registerServiceWorker(): void {
     return;
   }
 
-  // Listen for controllerchange event on navigator.serviceWorker and reload the page once,
-  // using a session flag so it can never reload more than once in a session.
+  // Listen for controllerchange event on navigator.serviceWorker and reload the page.
+  // Uses an in-memory flag (isReloading) to prevent double reload in the same page load,
+  // ensuring genuine new deploys always reload cleanly on controller takeover.
   if (!controllerListenerAttached) {
     controllerListenerAttached = true;
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (isReloading) return;
-      try {
-        if (sessionStorage.getItem("sw_reloaded_in_session") === "true") {
-          return;
-        }
-        sessionStorage.setItem("sw_reloaded_in_session", "true");
-      } catch {
-        // Fallback if sessionStorage is restricted
-      }
       isReloading = true;
       window.location.reload();
     });
@@ -62,13 +56,13 @@ export function registerServiceWorker(): void {
             // Listen for the new worker reaching the "installed" state while a controller already exists
             newWorker.addEventListener("statechange", () => {
               if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
-                // Tell the new worker to activate
+                // Tell the new worker to activate immediately
                 newWorker.postMessage({ type: "SKIP_WAITING" });
               }
             });
           });
 
-          // Periodically check for updates if app stays open
+          // Check for updates if app stays open
           try {
             registration.update().catch(() => {});
           } catch {
@@ -76,7 +70,7 @@ export function registerServiceWorker(): void {
           }
         })
         .catch(() => {
-          // Safe catch: some Android WebViews restrict Service Workers or fail silently
+          // Safe catch: some WebViews restrict Service Workers or fail silently
         });
     } catch {
       // Safe catch for environment restrictions
@@ -85,10 +79,10 @@ export function registerServiceWorker(): void {
 
   // Ensure first render, fonts, and splash screen are 100% unblocked
   if (document.readyState === "complete") {
-    setTimeout(register, 1200);
+    setTimeout(register, 1000);
   } else {
     window.addEventListener("load", () => {
-      setTimeout(register, 1200);
+      setTimeout(register, 1000);
     });
   }
 }
