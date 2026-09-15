@@ -3604,7 +3604,7 @@ export default function App() {
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col items-center justify-center gap-2.5 text-center">
           <div className="text-xs sm:text-[13px] text-gray-500 font-semibold tracking-wide">
-            © 2026 Ghotki Blood Donors Network — v2
+            © 2026 Ghotki Blood Donors Network.
           </div>
           <div className="text-xs sm:text-[13px] text-gray-450 font-medium tracking-wide flex flex-col items-center gap-1.5 justify-center mt-0.5">
             <span>Developed By</span>
