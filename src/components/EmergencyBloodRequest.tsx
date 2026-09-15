@@ -101,7 +101,7 @@ export default function EmergencyBloodRequest({
   return (
     <div className="max-w-2xl mx-auto view-transition-enter space-y-5">
       {/* Main Request Form Card */}
-      <div className="glass-panel p-5 sm:p-7 rounded-3xl border border-white/60 shadow-xl relative overflow-visible">
+      <div className="glass-panel p-5 sm:p-7 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold rounded-t-3xl" />
 
         {/* Header row: back arrow icon button on left + single-line heading */}

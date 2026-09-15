@@ -2025,7 +2025,7 @@ export default function App() {
 
             {/* Emergency Blood Request Banner Card */}
             <div className="glass-panel p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-rose-200/80 shadow-md relative overflow-hidden bg-gradient-to-br from-rose-50/70 via-white to-white">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold" />
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold rounded-t-2xl sm:rounded-t-3xl" />
               
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5 min-w-0">
@@ -2055,7 +2055,7 @@ export default function App() {
 
             {/* Core SEARCH SECTION Box */}
             <div id="search-anchor" className="scroll-mt-24 relative z-20">
-              <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/60 shadow-xl relative overflow-visible z-20">
+              <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-white/60 shadow-xl relative overflow-hidden z-20">
                 <div className="absolute top-0 left-0 h-1.5 bg-gradient-to-r from-blood to-gold w-full rounded-t-3xl" />
                 
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -2219,7 +2219,7 @@ export default function App() {
           <div key="REGISTER" className="max-w-2xl mx-auto view-transition-enter">
             <div 
               ref={regCardRef}
-              className="glass-panel p-6 sm:p-9 rounded-3xl border border-white/60 shadow-xl relative overflow-visible scroll-mt-24"
+              className="glass-panel p-6 sm:p-9 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden scroll-mt-24"
             >
               <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-blood-dark rounded-t-3xl" />
               
@@ -2636,7 +2636,7 @@ export default function App() {
         {view === "LOGIN" && (
           <div key="LOGIN" className="max-w-md mx-auto pt-6 view-transition-enter">
             <div className="glass-panel p-6 sm:p-9 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-blood-dark" />
+              <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-blood-dark rounded-t-3xl" />
               
               <div className="text-center space-y-2 mb-8">
                 <DrippingBloodIcon size={42} />
@@ -3219,7 +3219,7 @@ export default function App() {
                 
                 {/* Last donation counter card */}
                 <div className="glass-panel p-6 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-blood" />
+                  <div className="absolute top-0 left-0 w-full h-1 bg-blood rounded-t-3xl" />
                   <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 bg-rose-50 rounded-xl border border-rose-100 text-blood">
                       <Calendar className="w-4 h-4" />
@@ -3299,7 +3299,7 @@ export default function App() {
       >
         {viewingDonor && (
           <>
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold" />
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-blood to-gold rounded-t-2xl sm:rounded-t-3xl" />
             
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-gray-100 flex justify-between items-start gap-3 bg-white/60 shrink-0">
