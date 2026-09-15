@@ -199,6 +199,32 @@ input[type="date"]::-webkit-datetime-edit-year-field {
   animation-delay: 640ms;
 }
 
+/* Dashboard 60ms Stagger Entrance Animations (Mount only) */
+.dash-stagger-0 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 0ms both;
+  will-change: opacity, transform;
+}
+.dash-stagger-1 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 60ms both;
+  will-change: opacity, transform;
+}
+.dash-stagger-2 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+  will-change: opacity, transform;
+}
+.dash-stagger-3 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+  will-change: opacity, transform;
+}
+.dash-stagger-4 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 240ms both;
+  will-change: opacity, transform;
+}
+.dash-stagger-5 {
+  animation: heroFadeUp 450ms cubic-bezier(0.16, 1, 0.3, 1) 300ms both;
+  will-change: opacity, transform;
+}
+
 /* Floating Red Blood Cells classes - Static without animation or blur */
 .floating-cell {
   position: absolute;

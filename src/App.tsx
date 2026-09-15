@@ -442,6 +442,84 @@ export default function App() {
     return searchResults.slice(0, visibleDonorCount);
   }, [searchResults, visibleDonorCount]);
 
+  // Derived dashboard stats from loaded donation records with fallback to currentUser.lastDonationDate
+  const dashboardStats = useMemo(() => {
+    const donationsCount = donationRecords.length;
+
+    // Find latest donation date from records, fallback to currentUser.lastDonationDate
+    let latestDateStr = "";
+    if (donationRecords.length > 0) {
+      const sorted = [...donationRecords].sort((a, b) => {
+        const timeA = new Date(a.date).getTime() || 0;
+        const timeB = new Date(b.date).getTime() || 0;
+        return timeB - timeA;
+      });
+      if (sorted[0]?.date) {
+        latestDateStr = sorted[0].date;
+      }
+    }
+    if (!latestDateStr && currentUser?.lastDonationDate) {
+      latestDateStr = currentUser.lastDonationDate;
+    }
+
+    // Short readable date: e.g. "15 May", or "—" if none
+    let shortDate = "—";
+    if (latestDateStr && String(latestDateStr).trim()) {
+      try {
+        const clean = String(latestDateStr).trim().split("T")[0];
+        const parts = clean.split("-");
+        if (parts.length === 3) {
+          const day = parseInt(parts[2], 10);
+          const mIdx = parseInt(parts[1], 10) - 1;
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          if (!isNaN(day) && mIdx >= 0 && mIdx < 12) {
+            shortDate = `${day} ${months[mIdx]}`;
+          }
+        } else {
+          const d = new Date(latestDateStr);
+          if (!isNaN(d.getTime())) {
+            shortDate = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+          }
+        }
+      } catch {
+        shortDate = "—";
+      }
+    }
+
+    // Eligibility calculation (90 days medical interval)
+    let isEligible = true;
+    let daysRemaining = 0;
+
+    if (latestDateStr && String(latestDateStr).trim()) {
+      try {
+        const d = new Date(latestDateStr);
+        d.setHours(0, 0, 0, 0);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const diffMs = today.getTime() - d.getTime();
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+        if (!isNaN(diffDays) && diffDays >= 0 && diffDays < 90) {
+          isEligible = false;
+          daysRemaining = 90 - diffDays;
+        } else {
+          isEligible = true;
+        }
+      } catch {
+        isEligible = true;
+      }
+    } else {
+      isEligible = true;
+    }
+
+    return {
+      donationsCount,
+      shortDate,
+      isEligible,
+      daysRemaining
+    };
+  }, [donationRecords, currentUser?.lastDonationDate]);
+
   const hasMoreDonors = visibleDonorCount < searchResults.length;
 
   // Infinite scroll observer for donor cards (loads next batch of 20)
@@ -2757,11 +2835,11 @@ export default function App() {
 
         {/* ==================== 4. DONOR DASHBOARD ==================== */}
         {view === "DASHBOARD" && currentUser && (
-          <div key="DASHBOARD" className="space-y-8 view-transition-enter">
+          <div key="DASHBOARD" className="max-w-xl mx-auto space-y-3.5 sm:space-y-4">
             
-            {/* Status Notification Banners */}
+            {/* Status Notice Card when status is Pending or Rejected */}
             {(currentUser.status || "").toLowerCase() === "pending" ? (
-              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-xs">
+              <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-xs dash-stagger-0">
                 <Clock className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm sm:text-base text-amber-950">Approval ka intezar</h4>
@@ -2784,7 +2862,7 @@ export default function App() {
                 </div>
               </div>
             ) : (currentUser.status || "").toLowerCase() === "rejected" ? (
-              <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-xs">
+              <div className="bg-rose-50 border border-rose-200 text-rose-900 p-4 sm:p-5 rounded-2xl flex items-start gap-3 shadow-xs dash-stagger-0">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="font-bold text-sm">Aapka account approve nahi hua</h4>
@@ -2793,465 +2871,446 @@ export default function App() {
                   </p>
                 </div>
               </div>
-            ) : (currentUser.status || "").toLowerCase() === "active" ? (
-              <div className="bg-emerald-50 border border-emerald-100 text-emerald-900 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
-                <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-sm">Dashboard is Active!</h4>
-                  <p className="text-xs text-emerald-700 leading-relaxed mt-0.5 font-semibold">
-                    Aap ab Ghotki Network me live hain. Agar kisi majburi ke tehat aap dastyab na hon, toh niche dia gaya "Ready to Donate" toggle band kar dein. Shukriya.
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="bg-gray-100 border border-gray-200 text-gray-800 p-4 rounded-2xl flex items-start gap-3 shadow-xs">
-                <AlertTriangle className="w-5 h-5 text-gray-500 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="font-bold text-sm">Aap is waqt Inactive hain</h4>
-                  <p className="text-xs text-gray-600 leading-relaxed mt-0.5 font-semibold">
-                    Patients aapko contact nahi kar sakte. Dobara available hone ke liye "Ready to Donate" toggle ON karein.
-                  </p>
-                </div>
-              </div>
-            )}
+            ) : null}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              
-              {/* Profile Card & Readiness Panel (Bento columns) */}
-              <div className="lg:col-span-8 flex flex-col gap-6">
-                
-                {/* Profile panel with glassmorphism */}
-                <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 right-0 -tr-y-4 translate-x-4 bg-blood/5 w-40 h-40 rounded-full pointer-events-none" />
-                  
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-100 pb-5 mb-5 uppercase tracking-wide">
-                    <div className="flex items-start gap-4 min-w-0 flex-1">
-                      {/* Generous blood badge indicating currently logged group */}
-                      <span className="w-14 h-14 sm:w-16 sm:h-16 shrink-0 flex items-center justify-center rounded-2xl bg-gradient-to-br from-blood to-blood-dark text-white font-display font-extrabold text-xl sm:text-2xl shadow-lg border border-gold/30 ring-4 ring-rose-100">
-                        {currentUser.bloodGroup}
+            {/* 1. HERO PROFILE CARD */}
+            <div className="glass-panel p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/60 shadow-md relative overflow-hidden dash-stagger-1">
+              {/* Top Row: Blood Group Badge + Name & Status Pill */}
+              <div className="flex items-center gap-3.5 sm:gap-4">
+                {/* Large circular blood-group badge */}
+                <div className="w-13 h-13 sm:w-15 sm:h-15 rounded-full bg-gradient-to-br from-blood to-blood-dark text-white font-display font-black text-xl sm:text-2xl shadow-md border border-white/20 flex items-center justify-center shrink-0">
+                  {currentUser.bloodGroup}
+                </div>
+
+                {/* Donor's name in bold on one line (wrapping cleanly if long), and status pill below */}
+                <div className="min-w-0 flex-1">
+                  <h2 className="font-display font-extrabold text-base sm:text-lg text-gray-900 leading-snug break-words">
+                    {currentUser.name}
+                  </h2>
+                  <div className="mt-1">
+                    {(currentUser.status || "").toLowerCase() === "active" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-2xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                        Active
                       </span>
-                      <div className="min-w-0 flex-1">
-                        <h2 className="text-xl sm:text-2xl font-display font-extrabold text-gray-900 tracking-tight leading-snug break-words">
-                          {currentUser.name}
-                        </h2>
-                        {currentUser.fatherName && String(currentUser.fatherName).trim() ? (
-                          <p className="text-xs text-gray-500 mt-2 font-sans font-medium uppercase tracking-wider break-words leading-normal">
-                            S/O {String(currentUser.fatherName).trim()}
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-4 gap-x-6 text-sm text-gray-600">
-                    <div className="flex items-start gap-2.5 min-w-0 text-left">
-                      <MapPin className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1 flex flex-col items-start text-left">
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold block w-full text-left">Taluka / City & Address</p>
-                        <p className="font-bold text-gray-900 break-words leading-snug mt-0.5 block w-full text-left">{(currentUser.city || "").trim()}</p>
-                        {currentUser.address && String(currentUser.address).trim() ? (
-                          <p className="text-xs text-gray-500 mt-0.5 break-words leading-relaxed block w-full text-left">{String(currentUser.address).trim()}</p>
-                        ) : null}
-                      </div>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 min-w-0">
-                      <Phone className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs text-gray-400 uppercase tracking-wider font-bold">Contact Registers</p>
-                        <p className="font-semibold text-gray-800 break-words leading-snug mt-0.5">Primary: {currentUser.primaryPhone}</p>
-                        {currentUser.secondaryPhone ? (
-                          <p className="text-xs text-gray-500 mt-1 break-words leading-relaxed">Secondary phone: {currentUser.secondaryPhone}</p>
-                        ) : (
-                          <p className="text-xs text-gray-400 italic mt-1">Koi secondary number nahi diya</p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Readiness logic inside profile */}
-                  <div className="mt-6 p-4 bg-gray-50 rounded-2xl border border-gray-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                    <div>
-                      <h4 className="font-display font-bold text-sm text-gray-800 flex items-center gap-1.5">
-                        <span className={`w-2.5 h-2.5 rounded-full inline-block ${
-                          (currentUser.status || "").toLowerCase() === "active"
-                            ? "bg-emerald-500"
-                            : (currentUser.status || "").toLowerCase() === "pending"
-                            ? "bg-amber-500"
-                            : "bg-rose-500"
-                        }`} />
-                        Status: {currentUser.status || "Pending"}
-                      </h4>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {(currentUser.status || "").toLowerCase() === "active"
-                          ? "Khoon emergency ke liye aap dastyab hain. Log aapse WhatsApp/Call pe baat kar sakte hain."
-                          : (currentUser.status || "").toLowerCase() === "pending"
-                          ? "Aapka account abhi verification me hai. Verification ke baad ready status activate hoga."
-                          : (currentUser.status || "").toLowerCase() === "rejected"
-                          ? "Aapka account rejected hai. Admin se rabta karein."
-                          : "Temporarily off the grid. Patients will skip your context call."}
-                      </p>
-                    </div>
-
-                    {/* Switch Toggle (HIDDEN for Pending and Rejected users) */}
-                    {(currentUser.status || "").toLowerCase() !== "pending" && (currentUser.status || "").toLowerCase() !== "rejected" ? (
-                      <div className="shrink-0 flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-gray-100">
-                        <span className="text-xs font-extrabold text-gray-500 tracking-wider">READY TO DONATE</span>
-                        <button
-                          onClick={() => handleToggleState((currentUser.status || "").toLowerCase() !== "active")}
-                          disabled={isTogglingStatus}
-                          className={`w-14 h-8 rounded-full p-1 toggle-track relative focus:outline-none focus:ring-2 focus:ring-blood/20 shrink-0 btn-press ${
-                            (currentUser.status || "").toLowerCase() === "active" ? "bg-emerald-500" : "bg-gray-300"
-                          } ${isTogglingStatus ? "opacity-60 cursor-not-allowed" : ""}`}
-                        >
-                          <div
-                            className={`w-6 h-6 rounded-full bg-white shadow-md transform toggle-knob ${
-                              (currentUser.status || "").toLowerCase() === "active" ? "translate-x-6" : "translate-x-0"
-                            }`}
-                          />
-                        </button>
-                      </div>
+                    ) : (currentUser.status || "").toLowerCase() === "pending" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shadow-2xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                        Pending
+                      </span>
+                    ) : (currentUser.status || "").toLowerCase() === "rejected" ? (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200 shadow-2xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                        Rejected
+                      </span>
                     ) : (
-                      <div className="shrink-0 pt-2 sm:pt-0">
-                        {(currentUser.status || "").toLowerCase() === "pending" ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300">
-                            <Clock className="w-3.5 h-3.5" />
-                            Pending Approval
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                            <AlertTriangle className="w-3.5 h-3.5" />
-                            Rejected
-                          </span>
-                        )}
-                      </div>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-gray-100 text-gray-600 border border-gray-200 shadow-2xs">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-400 shrink-0" />
+                        Inactive
+                      </span>
                     )}
                   </div>
                 </div>
+              </div>
 
-                {/* Mere Donation Records Card */}
-                <div className="glass-panel p-5 sm:p-6 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
-                  <div className="flex items-center justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="p-2 bg-rose-50 rounded-xl border border-rose-100 text-blood shrink-0">
-                        <Droplet className="w-4 h-4 fill-blood/20" />
-                      </div>
-                      <div className="min-w-0">
-                        <h3 className="font-display font-extrabold text-base text-gray-900 leading-snug truncate">
-                          Mere Donation Records
-                        </h3>
-                      </div>
-                    </div>
+              {/* Thin divider */}
+              <div className="border-t border-gray-100/80 my-3 sm:my-3.5" />
+
+              {/* City and address */}
+              <div className="flex items-start gap-2 text-xs text-gray-600">
+                <MapPin className="w-3.5 h-3.5 text-rose-500 shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1 leading-snug">
+                  <div className="font-bold text-gray-900">
+                    {(currentUser.city || "").trim() || "District Ghotki"}
                   </div>
-
-                  {/* Count line */}
-                  <p className="text-xs text-gray-600 font-medium mb-3">
-                    {isLoadingDonations ? (
-                      "Records load ho rahe hain..."
-                    ) : donationRecords.length > 0 ? (
-                      `Aap ne ab tak ${donationRecords.length} martaba khoon diya hai.`
-                    ) : (
-                      "Abhi tak koi record nahi. Pehla record add karein."
-                    )}
-                  </p>
-
-                  {/* Records List or Skeletons */}
-                  {isLoadingDonations ? (
-                    <div className="space-y-2.5 my-3">
-                      <div className="h-16 bg-rose-50/70 animate-pulse rounded-2xl border border-rose-100/50" />
-                      <div className="h-16 bg-rose-50/40 animate-pulse rounded-2xl border border-rose-100/30" />
-                    </div>
-                  ) : donationRecords.length > 0 ? (
-                    <div className="space-y-2.5 my-3">
-                      {(showAllDonations ? donationRecords : donationRecords.slice(0, 5)).map((record) => (
-                        <div
-                          key={record.id}
-                          className="p-3 sm:p-3.5 bg-white/80 hover:bg-white rounded-2xl border border-gray-100 shadow-xs flex items-start justify-between gap-3 transition-colors"
-                        >
-                          <div className="min-w-0 flex-1">
-                            <div className="font-display font-extrabold text-xs sm:text-sm text-gray-900 leading-snug">
-                              {formatDonationDate(record.date)}
-                            </div>
-
-                            {/* place and forWhom */}
-                            {(record.place?.trim() || record.forWhom?.trim()) && (
-                              <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 mt-1">
-                                {record.place?.trim() && (
-                                  <span className="inline-flex items-center gap-1 break-words">
-                                    <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
-                                    <span>{record.place.trim()}</span>
-                                  </span>
-                                )}
-                                {record.place?.trim() && record.forWhom?.trim() && (
-                                  <span className="text-gray-300">•</span>
-                                )}
-                                {record.forWhom?.trim() && (
-                                  <span className="inline-flex items-center gap-1 break-words">
-                                    <User className="w-3 h-3 text-emerald-600 shrink-0" />
-                                    <span>{record.forWhom.trim()}</span>
-                                  </span>
-                                )}
-                              </div>
-                            )}
-
-                            {/* notes */}
-                            {record.notes?.trim() && (
-                              <p className="text-xs text-gray-600 bg-gray-50/80 px-2.5 py-1 rounded-lg border border-gray-100/80 mt-1.5 break-words italic">
-                                {record.notes.trim()}
-                              </p>
-                            )}
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => setRecordToDelete(record)}
-                            title="Record delete karein"
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 btn-press mt-0.5"
-                            aria-label="Delete donation record"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
-
-                      {donationRecords.length > 5 && (
-                        <button
-                          type="button"
-                          onClick={() => setShowAllDonations(!showAllDonations)}
-                          className="w-full py-2 text-xs font-bold text-blood hover:text-blood-dark flex items-center justify-center gap-1 transition-colors btn-press"
-                        >
-                          <span>{showAllDonations ? "Kam dekhein" : `Sab dekhein (${donationRecords.length})`}</span>
-                          {showAllDonations ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
+                  {currentUser.address && String(currentUser.address).trim() ? (
+                    <div className="text-gray-500 text-[11px] sm:text-xs mt-0.5 break-words">
+                      {String(currentUser.address).trim()}
                     </div>
                   ) : null}
+                </div>
+              </div>
+            </div>
 
-                  {/* Primary button at bottom */}
+            {/* 2. STATS ROW */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 dash-stagger-2">
+              {/* Stat 1: Donations */}
+              <div className="glass-panel py-2.5 px-2 sm:py-3 sm:px-3 rounded-2xl border border-white/60 shadow-md text-center flex flex-col items-center justify-center min-w-0">
+                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  Donations
+                </span>
+                <span className="font-display font-black text-base sm:text-lg text-gray-900 mt-0.5 whitespace-nowrap">
+                  {dashboardStats.donationsCount}
+                </span>
+              </div>
+
+              {/* Stat 2: Aakhri baar */}
+              <div className="glass-panel py-2.5 px-2 sm:py-3 sm:px-3 rounded-2xl border border-white/60 shadow-md text-center flex flex-col items-center justify-center min-w-0">
+                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  Aakhri baar
+                </span>
+                <span className="font-display font-black text-sm sm:text-base text-gray-900 mt-0.5 whitespace-nowrap">
+                  {dashboardStats.shortDate}
+                </span>
+              </div>
+
+              {/* Stat 3: Eligible */}
+              <div className="glass-panel py-2.5 px-2 sm:py-3 sm:px-3 rounded-2xl border border-white/60 shadow-md text-center flex flex-col items-center justify-center min-w-0">
+                <span className="text-[10px] sm:text-[11px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">
+                  Eligible
+                </span>
+                <span className={`font-display font-black text-sm sm:text-base mt-0.5 whitespace-nowrap ${
+                  dashboardStats.isEligible ? "text-emerald-600" : "text-amber-600"
+                }`}>
+                  {dashboardStats.isEligible ? "Abhi" : `${dashboardStats.daysRemaining} din`}
+                </span>
+              </div>
+            </div>
+
+            {/* 3. READY TO DONATE */}
+            <div className="glass-panel p-4 sm:p-5 rounded-2xl sm:rounded-3xl border border-white/60 shadow-md flex items-center justify-between gap-3 dash-stagger-3">
+              <div className="min-w-0 flex-1">
+                <h4 className="font-display font-bold text-sm sm:text-base text-gray-900 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full inline-block shrink-0 ${
+                    (currentUser.status || "").toLowerCase() === "active"
+                      ? "bg-emerald-500"
+                      : (currentUser.status || "").toLowerCase() === "pending"
+                      ? "bg-amber-500"
+                      : (currentUser.status || "").toLowerCase() === "rejected"
+                      ? "bg-rose-500"
+                      : "bg-gray-400"
+                  }`} />
+                  <span>Ready to Donate</span>
+                </h4>
+                <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                  {(currentUser.status || "").toLowerCase() === "active"
+                    ? "Khoon emergency ke liye aap dastyab hain. Patients aapse contact kar sakte hain."
+                    : (currentUser.status || "").toLowerCase() === "pending"
+                    ? "Aapka account verification me hai. Verification ke baad status active hoga."
+                    : (currentUser.status || "").toLowerCase() === "rejected"
+                    ? "Aapka account rejected hai. Admin se rabta karein."
+                    : "Temporarily off the grid. Patients will skip your contact."}
+                </p>
+              </div>
+
+              {/* Switch Toggle (HIDDEN for Pending and Rejected users) */}
+              {(currentUser.status || "").toLowerCase() !== "pending" && (currentUser.status || "").toLowerCase() !== "rejected" ? (
+                <div className="shrink-0 flex items-center">
                   <button
-                    type="button"
-                    onClick={() => {
-                      setNewDonationDate(getTodayDateString());
-                      setNewDonationPlace("");
-                      setNewDonationForWhom("");
-                      setNewDonationNotes("");
-                      setShowAddDonationModal(true);
-                    }}
-                    className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 bg-gradient-to-r from-blood to-blood-dark text-white rounded-xl font-display font-extrabold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all btn-press"
+                    onClick={() => handleToggleState((currentUser.status || "").toLowerCase() !== "active")}
+                    disabled={isTogglingStatus}
+                    aria-label="Toggle ready to donate status"
+                    className={`w-13 h-7 sm:w-14 sm:h-8 rounded-full p-1 toggle-track relative focus:outline-none focus:ring-2 focus:ring-blood/20 shrink-0 btn-press transition-colors ${
+                      (currentUser.status || "").toLowerCase() === "active" ? "bg-emerald-500" : "bg-gray-300"
+                    } ${isTogglingStatus ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
-                    <Plus className="w-4 h-4 shrink-0" />
-                    <span>Naya Record Add Karein</span>
+                    <div
+                      className={`w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-white shadow-md transform toggle-knob transition-transform ${
+                        (currentUser.status || "").toLowerCase() === "active" ? "translate-x-6" : "translate-x-0"
+                      }`}
+                    />
                   </button>
                 </div>
+              ) : (
+                <div className="shrink-0">
+                  {(currentUser.status || "").toLowerCase() === "pending" ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-300 whitespace-nowrap">
+                      <Clock className="w-3.5 h-3.5" />
+                      Pending
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300 whitespace-nowrap">
+                      <AlertTriangle className="w-3.5 h-3.5" />
+                      Rejected
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
 
-                {/* Edit Profile Form (conditional block or integrated drawer layout) */}
-                {isEditingProfile ? (
-                  <div className="glass-panel p-6 rounded-3xl border border-white/60 shadow-xl relative view-transition-enter">
-                    <div className="flex items-center justify-between border-b pb-4 mb-4">
-                      <h3 className="font-display font-extrabold text-lg text-gray-900 flex items-center gap-2">
-                        <Settings className="w-5 h-5 text-blood" />
-                        Edit Profile Details
-                      </h3>
-                      <button 
-                        onClick={() => setIsEditingProfile(false)}
-                        className="text-gray-400 hover:text-gray-600 rounded-lg p-1 btn-press"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <form onSubmit={handleSaveProfile} className="space-y-5">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FloatingLabelInput
-                          label="Full Name"
-                          id="editName"
-                          value={editName}
-                          onChange={(e) => setEditName(e.target.value)}
-                        />
-                        <FloatingLabelInput
-                          label="Father Name"
-                          id="editFatherName"
-                          value={editFatherName}
-                          onChange={(e) => setEditFatherName(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <CustomSelect
-                          label="Taluka / City"
-                          value={editCity}
-                          onChange={(val) => setEditCity(val)}
-                          options={GHOTKI_CITIES}
-                        />
-                        <CustomSelect
-                          label="Blood Group"
-                          value={editBloodGroup}
-                          onChange={(val) => setEditBloodGroup(val)}
-                          options={BLOOD_GROUPS.map((g) => ({ value: g, label: `Group: ${g}` }))}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FloatingLabelInput
-                          label="Secondary Phone"
-                          id="editSecondaryPhone"
-                          value={editSecondaryPhone}
-                          onChange={(e) => setEditSecondaryPhone(e.target.value)}
-                        />
-                        <FloatingLabelInput
-                          label="Address Detail"
-                          id="editAddress"
-                          value={editAddress}
-                          onChange={(e) => setEditAddress(e.target.value)}
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 pl-1 font-sans">
-                            Last Donation Date
-                          </label>
-                          <input
-                            type="date"
-                            id="editLastDonation"
-                            value={editLastDonation}
-                            onChange={(e) => setEditLastDonation(e.target.value)}
-                            className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 caret-blood focus:outline-none focus:ring-2 focus:ring-blood/40 focus:border-blood/50 text-sm font-semibold cursor-pointer"
-                          />
-                        </div>
-                      </div>
-
-                      {/* Optional Change Password Sub-section */}
-                      <div className="pt-3 border-t border-gray-100">
-                        <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                          Change Password (Optional)
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <FloatingLabelInput
-                            label="Current Password"
-                            id="currentPassword"
-                            type="password"
-                            value={currentPassword}
-                            onChange={(e) => setCurrentPassword(e.target.value)}
-                            placeholder="Zaroori hai agar password badalna ho"
-                          />
-                          <FloatingLabelInput
-                            label="New Password (Min 6 chars)"
-                            id="editPassword"
-                            type="password"
-                            value={editPassword}
-                            onChange={(e) => setEditPassword(e.target.value)}
-                            placeholder="Naya password likhein"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="flex justify-end gap-2 pt-2 border-t mt-4">
-                        <button
-                          type="button"
-                          onClick={() => setIsEditingProfile(false)}
-                          className="px-4 py-2 border border-gray-200 text-gray-500 text-xs font-display font-bold rounded-xl hover:bg-gray-50 transition-colors btn-press"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={editProfileLoading}
-                          className={`px-5 py-2.5 bg-gradient-to-r from-blood to-blood-dark text-white text-xs font-display font-extrabold rounded-xl shadow-md transition-all disabled:opacity-50 btn-press ${
-                            editProfileLoading ? "btn-loading" : ""
-                          }`}
-                        >
-                          {editProfileLoading ? (
-                            <>
-                              <span className="liquid"></span>
-                              <span className="btn-label">Save ho raha hai</span>
-                            </>
-                          ) : (
-                            "Save Changes"
-                          )}
-                        </button>
-                      </div>
-                    </form>
+            {/* 4. MERE DONATION RECORDS CARD */}
+            <div className="glass-panel p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/60 shadow-md relative overflow-hidden dash-stagger-4">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="p-2 bg-rose-50 rounded-xl border border-rose-100 text-blood shrink-0">
+                    <Droplet className="w-4 h-4 fill-blood/20" />
                   </div>
-                ) : (
-                  <div className="flex flex-col sm:flex-row gap-2">
-                    <button
-                      onClick={() => {
-                        if (currentUser) {
-                          setEditName(currentUser.name || "");
-                          setEditFatherName(currentUser.fatherName || "");
-                          setEditAddress(currentUser.address || "");
-                          setEditCity(currentUser.city || "");
-                          setEditBloodGroup(currentUser.bloodGroup || "");
-                          setEditSecondaryPhone(currentUser.secondaryPhone || "");
-                          setEditLastDonation(currentUser.lastDonationDate || "");
-                          setEditStatus(currentUser.status || UserStatus.ACTIVE);
-                          setEditWillingToDonate(currentUser.willingToDonate ?? true);
-                          setEditPassword("");
-                          setCurrentPassword("");
-                        }
-                        setIsEditingProfile(true);
-                      }}
-                      className="flex items-center justify-center gap-1.5 px-3.5 sm:px-5 py-2.5 sm:py-3 border border-gray-200 text-gray-700 bg-white/80 hover:bg-gray-50 hover:text-black rounded-xl font-display font-extrabold text-[11px] sm:text-xs shadow-sm shadow-gray-100 transition-colors whitespace-nowrap btn-press"
-                    >
-                      <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 shrink-0" />
-                      <span className="whitespace-nowrap">Edit My Profile</span>
-                    </button>
-                    
-                    <button
-                      onClick={() => {
-                        const message = `Main Ghotki Blood Donors Network ka registered member hun. Mera blood group is ${currentUser.bloodGroup} hai. Agr mere blood ki zaroorat ho toh is portal ke zarye dhoondein: ${window.location.origin}`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
-                        addToast("success", "Share link open ho gaya");
-                      }}
-                      className="flex items-center justify-center gap-1.5 px-3 sm:px-5 py-2.5 sm:py-3 border border-emerald-200 hover:border-emerald-300 text-emerald-700 bg-emerald-50/50 hover:bg-emerald-50 rounded-xl font-display font-extrabold text-[11px] sm:text-xs shadow-sm transition-colors whitespace-nowrap btn-press"
-                    >
-                      <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                      <span className="whitespace-nowrap">Share Ready Status on WhatsApp</span>
-                    </button>
-                  </div>
-                )}
-
-              </div>
-
-              {/* Statistics/Days calculation Right Bar Layout */}
-              <div className="lg:col-span-4 flex flex-col gap-6">
-                
-                {/* Last donation counter card */}
-                <div className="glass-panel p-6 rounded-3xl border border-white/60 shadow-xl relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-blood rounded-t-3xl" />
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="p-2 bg-rose-50 rounded-xl border border-rose-100 text-blood">
-                      <Calendar className="w-4 h-4" />
-                    </div>
-                    <h3 className="font-display font-bold text-sm text-gray-800">
-                      Donation Ledger
+                  <div className="min-w-0">
+                    <h3 className="font-display font-extrabold text-base text-gray-900 leading-snug truncate">
+                      Mere Donation Records
                     </h3>
                   </div>
-
-                  <p className="text-[10px] text-gray-400 uppercase tracking-widest font-mono">Days since last atia</p>
-                  <p className="mt-2 text-xs font-bold text-gray-700 leading-relaxed bg-rose-50/50 p-3 rounded-xl border border-rose-100/50">
-                    {getDaysAgoText(currentUser.lastDonationDate)}
-                  </p>
-
-                  <p className="mt-4 text-xs text-gray-400 leading-relaxed font-sans">
-                    Doctor's reminder: Medical rules ke mutabiq mard 90 din (3 mahine) aur khawateen 120 din ke baad dobara khoon atia karne ke kabil hote hain.
-                  </p>
                 </div>
-
-                {/* Secure network pledge info */}
-                <div className="bg-gradient-to-br from-blood-dark to-blood p-6 rounded-3xl text-white shadow-xl relative overflow-hidden">
-                  <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-white/5" />
-                  <h4 className="font-display font-extrabold text-base mb-2 flex items-center gap-1.5 text-yellow-300">
-                    Sada-e-Insaanyat
-                  </h4>
-                  <p className="text-xs text-rose-100 leading-relaxed">
-                    Aap ka her aik drop poore Ghotki district ke kisi zakhmi ko bacha sakta hai. Ghotki, Daharki aur Mirpur Mathelo ke hospitals, ya highway accidents, ya deliver cases me aap ka aik response anmol hai. JazakAllah!
-                  </p>
-                </div>
-
               </div>
 
+              {/* Count line */}
+              <p className="text-xs text-gray-600 font-medium mb-3">
+                {isLoadingDonations ? (
+                  "Records load ho rahe hain..."
+                ) : donationRecords.length > 0 ? (
+                  `Aap ne ab tak ${donationRecords.length} martaba khoon diya hai.`
+                ) : (
+                  "Abhi tak koi record nahi. Pehla record add karein."
+                )}
+              </p>
+
+              {/* Records List or Skeletons */}
+              {isLoadingDonations ? (
+                <div className="space-y-2.5 my-3">
+                  <div className="h-16 bg-rose-50/70 animate-pulse rounded-2xl border border-rose-100/50" />
+                  <div className="h-16 bg-rose-50/40 animate-pulse rounded-2xl border border-rose-100/30" />
+                </div>
+              ) : donationRecords.length > 0 ? (
+                <div className="space-y-2.5 my-3">
+                  {(showAllDonations ? donationRecords : donationRecords.slice(0, 5)).map((record) => (
+                    <div
+                      key={record.id}
+                      className="p-3 sm:p-3.5 bg-white/80 hover:bg-white rounded-2xl border border-gray-100 shadow-xs flex items-start justify-between gap-3 transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="font-display font-extrabold text-xs sm:text-sm text-gray-900 leading-snug">
+                          {formatDonationDate(record.date)}
+                        </div>
+
+                        {/* place and forWhom */}
+                        {(record.place?.trim() || record.forWhom?.trim()) && (
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-gray-500 mt-1">
+                            {record.place?.trim() && (
+                              <span className="inline-flex items-center gap-1 break-words">
+                                <MapPin className="w-3 h-3 text-rose-500 shrink-0" />
+                                <span>{record.place.trim()}</span>
+                              </span>
+                            )}
+                            {record.place?.trim() && record.forWhom?.trim() && (
+                              <span className="text-gray-300">•</span>
+                            )}
+                            {record.forWhom?.trim() && (
+                              <span className="inline-flex items-center gap-1 break-words">
+                                <User className="w-3 h-3 text-emerald-600 shrink-0" />
+                                <span>{record.forWhom.trim()}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* notes */}
+                        {record.notes?.trim() && (
+                          <p className="text-xs text-gray-600 bg-gray-50/80 px-2.5 py-1 rounded-lg border border-gray-100/80 mt-1.5 break-words italic">
+                            {record.notes.trim()}
+                          </p>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setRecordToDelete(record)}
+                        title="Record delete karein"
+                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors shrink-0 btn-press mt-0.5"
+                        aria-label="Delete donation record"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+
+                  {donationRecords.length > 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDonations(!showAllDonations)}
+                      className="w-full py-2 text-xs font-bold text-blood hover:text-blood-dark flex items-center justify-center gap-1 transition-colors btn-press"
+                    >
+                      <span>{showAllDonations ? "Kam dekhein" : `Sab dekhein (${donationRecords.length})`}</span>
+                      {showAllDonations ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+
+              {/* Primary button at bottom */}
+              <button
+                type="button"
+                onClick={() => {
+                  setNewDonationDate(getTodayDateString());
+                  setNewDonationPlace("");
+                  setNewDonationForWhom("");
+                  setNewDonationNotes("");
+                  setShowAddDonationModal(true);
+                }}
+                className="w-full mt-3 flex items-center justify-center gap-2 py-2.5 sm:py-3 px-4 bg-gradient-to-r from-blood to-blood-dark text-white rounded-xl font-display font-extrabold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all btn-press"
+              >
+                <Plus className="w-4 h-4 shrink-0" />
+                <span>Naya Record Add Karein</span>
+              </button>
+            </div>
+
+            {/* 5. EDIT PROFILE & ACTIONS */}
+            <div className="dash-stagger-5">
+              {isEditingProfile ? (
+                <div className="glass-panel p-5 sm:p-6 rounded-2xl sm:rounded-3xl border border-white/60 shadow-md relative">
+                  <div className="flex items-center justify-between border-b pb-3 mb-4">
+                    <h3 className="font-display font-extrabold text-base sm:text-lg text-gray-900 flex items-center gap-2">
+                      <Settings className="w-4 h-4 sm:w-5 sm:h-5 text-blood" />
+                      Edit Profile Details
+                    </h3>
+                    <button 
+                      onClick={() => setIsEditingProfile(false)}
+                      className="text-gray-400 hover:text-gray-600 rounded-lg p-1 btn-press"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleSaveProfile} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <FloatingLabelInput
+                        label="Full Name"
+                        id="editName"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                      />
+                      <FloatingLabelInput
+                        label="Father Name"
+                        id="editFatherName"
+                        value={editFatherName}
+                        onChange={(e) => setEditFatherName(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <CustomSelect
+                        label="Taluka / City"
+                        value={editCity}
+                        onChange={(val) => setEditCity(val)}
+                        options={GHOTKI_CITIES}
+                      />
+                      <CustomSelect
+                        label="Blood Group"
+                        value={editBloodGroup}
+                        onChange={(val) => setEditBloodGroup(val)}
+                        options={BLOOD_GROUPS.map((g) => ({ value: g, label: `Group: ${g}` }))}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <FloatingLabelInput
+                        label="Secondary Phone"
+                        id="editSecondaryPhone"
+                        value={editSecondaryPhone}
+                        onChange={(e) => setEditSecondaryPhone(e.target.value)}
+                      />
+                      <FloatingLabelInput
+                        label="Address Detail"
+                        id="editAddress"
+                        value={editAddress}
+                        onChange={(e) => setEditAddress(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 pl-1 font-sans">
+                          Last Donation Date
+                        </label>
+                        <input
+                          type="date"
+                          id="editLastDonation"
+                          value={editLastDonation}
+                          onChange={(e) => setEditLastDonation(e.target.value)}
+                          className="w-full px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-900 caret-blood focus:outline-none focus:ring-2 focus:ring-blood/40 focus:border-blood/50 text-sm font-semibold cursor-pointer"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Optional Change Password Sub-section */}
+                    <div className="pt-3 border-t border-gray-100">
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2.5">
+                        Change Password (Optional)
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        <FloatingLabelInput
+                          label="Current Password"
+                          id="currentPassword"
+                          type="password"
+                          value={currentPassword}
+                          onChange={(e) => setCurrentPassword(e.target.value)}
+                          placeholder="Zaroori hai agar password badalna ho"
+                        />
+                        <FloatingLabelInput
+                          label="New Password (Min 6 chars)"
+                          id="editPassword"
+                          type="password"
+                          value={editPassword}
+                          onChange={(e) => setEditPassword(e.target.value)}
+                          placeholder="Naya password likhein"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                      <button
+                        type="button"
+                        onClick={() => setIsEditingProfile(false)}
+                        className="px-4 py-2 border border-gray-200 text-gray-500 text-xs font-display font-bold rounded-xl hover:bg-gray-50 transition-colors btn-press"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={editProfileLoading}
+                        className={`px-5 py-2.5 bg-gradient-to-r from-blood to-blood-dark text-white text-xs font-display font-extrabold rounded-xl shadow-md transition-all disabled:opacity-50 btn-press ${
+                          editProfileLoading ? "btn-loading" : ""
+                        }`}
+                      >
+                        {editProfileLoading ? (
+                          <>
+                            <span className="liquid"></span>
+                            <span className="btn-label">Save ho raha hai</span>
+                          </>
+                        ) : (
+                          "Save Changes"
+                        )}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              ) : (
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <button
+                    onClick={() => {
+                      if (currentUser) {
+                        setEditName(currentUser.name || "");
+                        setEditFatherName(currentUser.fatherName || "");
+                        setEditAddress(currentUser.address || "");
+                        setEditCity(currentUser.city || "");
+                        setEditBloodGroup(currentUser.bloodGroup || "");
+                        setEditSecondaryPhone(currentUser.secondaryPhone || "");
+                        setEditLastDonation(currentUser.lastDonationDate || "");
+                        setEditStatus(currentUser.status || UserStatus.ACTIVE);
+                        setEditWillingToDonate(currentUser.willingToDonate ?? true);
+                        setEditPassword("");
+                        setCurrentPassword("");
+                      }
+                      setIsEditingProfile(true);
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-3 border border-gray-200 text-gray-700 bg-white/90 hover:bg-gray-50 hover:text-black rounded-xl font-display font-extrabold text-xs shadow-xs transition-colors whitespace-nowrap btn-press"
+                  >
+                    <Settings className="w-4 h-4 text-gray-400 shrink-0" />
+                    <span className="whitespace-nowrap">Edit My Profile</span>
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      const message = `Main Ghotki Blood Donors Network ka registered member hun. Mera blood group ${currentUser.bloodGroup} hai. Agr mere blood ki zaroorat ho toh is portal ke zarye dhoondein: ${window.location.origin}`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+                      addToast("success", "Share link open ho gaya");
+                    }}
+                    className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-3 border border-emerald-200 hover:border-emerald-300 text-emerald-700 bg-emerald-50/60 hover:bg-emerald-50 rounded-xl font-display font-extrabold text-xs shadow-xs transition-colors whitespace-nowrap btn-press"
+                  >
+                    <Share2 className="w-4 h-4 shrink-0" />
+                    <span className="whitespace-nowrap">Share on WhatsApp</span>
+                  </button>
+                </div>
+              )}
             </div>
 
           </div>
